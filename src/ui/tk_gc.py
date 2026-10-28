@@ -6,13 +6,24 @@ Reference counting remains enabled; only cyclic collection is scheduled here.
 """
 import gc
 import threading
+import time
 import weakref
 import tkinter
 
 
 class TkGCGuard:
-    def __init__(self, interval_ms=1000):
+    """Collect cyclic garbage from the UI thread, cheaply.
+
+    A full ``gc.collect()`` every second walked the whole heap (the dataset and
+    card objects dominate it) and showed up as ~20% idle CPU, which is what made
+    window dragging stutter. Young generations are collected often and cheaply;
+    the expensive full pass runs rarely.
+    """
+
+    def __init__(self, interval_ms=1000, full_interval_s=120):
         self.interval_ms = interval_ms
+        self.full_interval_s = full_interval_s
+        self._last_full = time.monotonic()
         self._roots = []
         self._enabled_before = False
         self.active = False
@@ -42,7 +53,12 @@ class TkGCGuard:
             window = entry[0]()
             if not self.active or window is None:
                 return
-            gc.collect()
+            now = time.monotonic()
+            if now - self._last_full >= self.full_interval_s:
+                gc.collect()
+                self._last_full = now
+            else:
+                gc.collect(0)
             self.collections += 1
             entry[1] = window.after(self.interval_ms, collect)
 

@@ -906,20 +906,33 @@ class SuggestDeckPanel(ttk.Frame):
         )
         dataset_name = self.configuration.card_data.latest_dataset
 
+        def _post(fn):
+            """Queue a UI update; this callback runs on the deck-builder worker.
+
+            Tk must not be touched from here, not even winfo_exists(): doing so
+            corrupted the Tcl heap and crashed the app seconds later. Existence
+            is re-checked on the UI thread instead.
+            """
+            def guarded():
+                try:
+                    if self.winfo_exists():
+                        fn()
+                except Exception:
+                    pass
+
+            self.after(0, guarded)
+
         def _progress_cb(msg):
-            if not self.winfo_exists():
-                return
             if "status" in msg:
                 if not self.suggestions:
-                    self.after(0, lambda: self.var_archetype.set(msg["status"]))
+                    _post(lambda: self.var_archetype.set(msg["status"]))
                 if getattr(self, "app_context", None) and hasattr(
                     self.app_context, "loading_overlay"
                 ):
-                    self.after(
-                        0,
+                    _post(
                         lambda: self.app_context.loading_overlay.update_status(
                             msg["status"]
-                        ),
+                        )
                     )
             elif "variant_label" in msg:
                 lbl = msg["variant_label"]
@@ -933,7 +946,7 @@ class SuggestDeckPanel(ttk.Frame):
                     if len(self.incremental_labels) == 1:
                         self._on_deck_selection_change(lbl)
 
-                self.after(0, _update_ui)
+                _post(_update_ui)
 
         def _worker():
             try:

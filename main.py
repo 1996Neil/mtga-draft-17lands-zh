@@ -277,6 +277,9 @@ def main(gc_guard=None):
         root.withdraw()
         if gc_guard is not None:
             gc_guard.attach(root)
+        # Tk is not thread safe; queue worker-thread callbacks onto the UI thread.
+        from src.ui.tk_thread import install as install_thread_safe_after
+        install_thread_safe_after(root)
 
         # Initialize Styling Engine
         # We apply a baseline theme so the splash screen matches the app

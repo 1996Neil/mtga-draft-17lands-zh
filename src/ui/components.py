@@ -448,6 +448,8 @@ class CardToolTip(tkinter.Toplevel):
         # Escape, or the parent widget being destroyed.
         self._drag_origin = None
         self._dragged = False
+        self._drag_job = None
+        self._pending_geometry = None
         self._toplevel = None
         self._escape_id = None
         self._destroy_id = None
@@ -500,8 +502,24 @@ class CardToolTip(tkinter.Toplevel):
         dx, dy = event.x_root - x0, event.y_root - y0
         if abs(dx) > 3 or abs(dy) > 3:
             self._dragged = True
-        if self._dragged:
-            self.geometry(f"+{wx + dx}+{wy + dy}")
+        if not self._dragged:
+            return
+        # Coalesce geometry calls: Tk repaints the whole popup on every move, so
+        # applying one position per idle cycle keeps the drag smooth.
+        self._pending_geometry = f"+{wx + dx}+{wy + dy}"
+        if self._drag_job is None:
+            self._drag_job = self.after_idle(self._flush_drag)
+
+    def _flush_drag(self):
+        self._drag_job = None
+        position = self._pending_geometry
+        if not position:
+            return
+        try:
+            if self.winfo_exists():
+                self.geometry(position)
+        except Exception:
+            pass
 
     def _on_release(self, event):
         if not self._dragged:
@@ -554,6 +572,13 @@ class CardToolTip(tkinter.Toplevel):
             except Exception:
                 pass
             self._escape_id = None
+
+        if getattr(self, "_drag_job", None) is not None:
+            try:
+                self.after_cancel(self._drag_job)
+            except Exception:
+                pass
+            self._drag_job = None
 
         if type(self)._active_tooltip is self:
             type(self)._active_tooltip = None
@@ -718,77 +743,89 @@ class ModernTreeview(ttk.Treeview):
         self._setup_row_colors()
         self._setup_column_drag()
 
-        self._pulse_step = 0
+        self._pulse_step = len(self._PULSE_COLORS)
+        self._pulse_style = None
         self._last_picked_items = set()
         self._animate_picked_row()
 
-    def _animate_picked_row(self):
-        if not self.winfo_exists():
-            return
+    _PULSE_MS = 65
+    _IDLE_MS = 700
+    _PULSE_COLORS = (
+        "#14532d", "#166534", "#15803d", "#16a34a", "#22c55e", "#4ade80",
+        "#22c55e", "#16a34a", "#15803d", "#166534", "#15803d", "#15803d",
+        "#15803d", "#15803d", "#15803d",
+    )
+    _PULSE_FG = (
+        "#f8fafc", "#f8fafc", "#f8fafc", "#f8fafc", "#0f172a", "#0f172a",
+        "#0f172a", "#f8fafc", "#f8fafc", "#f8fafc", "#ffffff", "#ffffff",
+        "#ffffff", "#ffffff", "#ffffff",
+    )
 
-        current_picked = set(
+    def _picked_items(self):
+        return set(
             item
             for item in self.get_children("")
             if "picked" in self.item(item, "tags")
         )
 
-        # Reset animation if new items are picked (e.g. data refreshed)
-        if current_picked != self._last_picked_items:
+    def _animate_picked_row(self):
+        """Pulse the freshly picked row, then go quiet.
+
+        Scanning every row of the table 15 times a second repainted the whole
+        treeview continuously (13% idle CPU, and window drags stuttered). Once
+        the pulse has settled this only polls a couple of times a second.
+        """
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+
+        settling = self._pulse_step >= len(self._PULSE_COLORS)
+        if settling:
+            interval = self._IDLE_MS
+            try:
+                current_picked = self._picked_items()
+            except Exception:
+                return
+            if current_picked == self._last_picked_items:
+                try:
+                    self.after(interval, self._animate_picked_row)
+                except Exception:
+                    pass
+                return
             self._pulse_step = 0
             self._last_picked_items = current_picked
-
-        if current_picked:
-            # Sequence for ~1 second (15 frames @ 65ms)
-            bg_colors = [
-                "#14532d",
-                "#166534",
-                "#15803d",
-                "#16a34a",
-                "#22c55e",
-                "#4ade80",
-                "#22c55e",
-                "#16a34a",
-                "#15803d",
-                "#166534",
-                "#15803d",
-                "#15803d",
-                "#15803d",
-                "#15803d",
-                "#15803d",
-            ]
-            fg_colors = [
-                "#f8fafc",
-                "#f8fafc",
-                "#f8fafc",
-                "#f8fafc",
-                "#0f172a",
-                "#0f172a",
-                "#0f172a",
-                "#f8fafc",
-                "#f8fafc",
-                "#f8fafc",
-                "#ffffff",
-                "#ffffff",
-                "#ffffff",
-                "#ffffff",
-                "#ffffff",
-            ]
-
-            if self._pulse_step < len(bg_colors):
-                idx = self._pulse_step
-                self.tag_configure(
-                    "picked", background=bg_colors[idx], foreground=fg_colors[idx]
-                )
-                self._pulse_step += 1
-            else:
-                # Settle on final solid color after animation ends
-                self.tag_configure("picked", background="#15803d", foreground="#ffffff")
+            interval = self._PULSE_MS
         else:
-            self._pulse_step = 0
-            self.tag_configure("picked", background="#15803d", foreground="#ffffff")
+            interval = self._PULSE_MS
+            try:
+                current_picked = self._picked_items()
+            except Exception:
+                return
+            if current_picked != self._last_picked_items:
+                self._pulse_step = 0
+                self._last_picked_items = current_picked
 
-        # Loop roughly at 15 FPS
-        self.after(65, self._animate_picked_row)
+        style = None
+        if current_picked and self._pulse_step < len(self._PULSE_COLORS):
+            idx = self._pulse_step
+            style = (self._PULSE_COLORS[idx], self._PULSE_FG[idx])
+            self._pulse_step += 1
+        elif self._pulse_step < len(self._PULSE_COLORS):
+            self._pulse_step = len(self._PULSE_COLORS)
+
+        settled = ("#15803d", "#ffffff")
+        style = style or settled
+        if style != self._pulse_style:
+            self.tag_configure("picked", background=style[0], foreground=style[1])
+            self._pulse_style = style
+
+        try:
+            if self.winfo_exists():
+                self.after(interval, self._animate_picked_row)
+        except Exception:
+            pass
 
     def _get_sort_group(self, view_id):
         """Links shared tables (e.g. Main Pack and Mini Pack) so they inherit sorting from each other."""
