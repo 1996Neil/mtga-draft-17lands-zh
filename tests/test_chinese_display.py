@@ -5,6 +5,7 @@ from pathlib import Path
 import threading
 import tkinter as tk
 from tkinter import ttk
+import hashlib
 import pytest
 from src.card_display import DisplayIndex, DisplayRecord, verified_index, identity_key
 from src.i18n import set_language, tr, advisor_reason
@@ -131,10 +132,32 @@ def test_three_ingestion_paths_have_no_chinese_mutation():
     for f in ('src/dataset.py','src/file_extractor.py','src/ui/app_controller.py'):
         code=(ROOT/f).read_text()
         assert 'apply_metadata' not in code and 'MtgchClient' not in code
-    # Every calculation core stays byte-identical to upstream v4.23.
-    import subprocess
-    for f in ['src/card_logic.py','src/card_utils.py','src/signals.py','src/set_metrics.py','src/sealed_logic.py']+list(str(p.relative_to(ROOT)) for p in (ROOT/'src/advisor').glob('*.py')):
-        assert (ROOT/f).read_bytes()==subprocess.check_output(['git','show',f'HEAD:{f}'],cwd=ROOT)
+
+
+def test_calculation_core_matches_the_recorded_baseline():
+    """The calculation core follows upstream 4.27 byte for byte.
+
+    These files decide what the tool recommends, so any local edit has to be
+    deliberate: update the recorded hash in the same commit that changes them.
+    """
+    expected = {
+    "src/card_logic.py": "3455bb673eb44971089286276b7c757c3faa280fd4e491c7cfa6abdb22590cbd",
+    "src/card_utils.py": "5643bbccdac8106e18f75b7b04940989ff57f36456ec2b33e5d6df7bd6fd111a",
+    "src/signals.py": "5fbef420ab2f86c77e0a2fe3f7382476cec02a1860b3d010593111ddc80beb05",
+    "src/set_metrics.py": "aeecf4ad030d474cedb404981b4a57df97c5002ccb622789da9cce26b6e8e0bb",
+    "src/sealed_logic.py": "a2ac56496d0fd13826959a7dc4d29da539911f85070738b80988bf84b5271be9",
+    "src/advisor/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/advisor/deck_builder.py": "872fe6080a342989ec089cb00bd6a0c83880fc989c3a37bbd768c4d6b07f9291",
+    "src/advisor/deck_scorer.py": "dff167618dd83551453e1482ee6446fc94165f34a2b77b92786032dea5f91872",
+    "src/advisor/engine.py": "cd071b1ddb764d5c4f3015692f6b1a0a6fafe3ff99655bbadd6c822e273f5344",
+    "src/advisor/mana_base.py": "3a308a451af83b6247373a23fb28e20ad68438fec7af890cfb47ebdd58156dac",
+    "src/advisor/schema.py": "d18c6ad6137c7c0ecd1fc7b27ec96604573f619f7a16d2c3ecd98a8b8f158ed1",
+    "src/advisor/simulator.py": "e75cd25b3f8d3082bcdc1d5723f110fefa49d0c3ef08cedf9106dbdbd0d672bf",
+    }
+    for f, digest in expected.items():
+        actual = hashlib.sha256((ROOT / f).read_bytes()).hexdigest()
+        assert actual == digest, f"{f} diverged from the recorded 4.27 baseline"
+
 
 def test_missing_quickdraft_never_falls_into_premier_on_repeated_refresh(session_tk_root):
     from unittest.mock import MagicMock, patch

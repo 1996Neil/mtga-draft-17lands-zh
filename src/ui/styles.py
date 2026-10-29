@@ -7,6 +7,10 @@ without cross-polluting the state.
 
 import tkinter
 import ttkbootstrap as ttk
+
+# ttkbootstrap 2 makes bootstyle support on standard Tk widgets opt-in.
+# Enable it here so every UI entry point retains the existing widget API.
+ttk.enable_global_api()
 from ttkbootstrap.constants import *
 
 # ttkbootstrap 2 only ships styled widgets as subclasses and leaves stock
@@ -30,7 +34,11 @@ logger = logging.getLogger(__name__)
 import tkinter.ttk as tk_ttk
 
 # --- MONKEY PATCH TKINTER.TTK TO PREVENT TTKBOOTSTRAP NATIVE THEME CRASH ---
-_orig_element_create = tk_ttk.Style.element_create
+# Idempotent: a module reload must wrap the real function again, not the
+# previous wrapper (which recursed forever once the global was rebound).
+_orig_element_create = getattr(
+    tk_ttk.Style.element_create, "__wrapped_original__", tk_ttk.Style.element_create
+)
 
 
 def _safe_element_create(self, elementname, etype, *args, **kw):
@@ -43,6 +51,7 @@ def _safe_element_create(self, elementname, etype, *args, **kw):
             raise
 
 
+_safe_element_create.__wrapped_original__ = _orig_element_create
 tk_ttk.Style.element_create = _safe_element_create
 
 # --- MSGCAT GUARD: PREVENT TTKBOOTSTRAP LOCALIZATION CRASH ON TCL 9 ---
@@ -56,7 +65,9 @@ tk_ttk.Style.element_create = _safe_element_create
 from ttkbootstrap import localization
 from ttkbootstrap.localization import msgs
 
-_orig_initialize_localities = msgs.initialize_localities
+_orig_initialize_localities = getattr(
+    msgs.initialize_localities, "__wrapped_original__", msgs.initialize_localities
+)
 
 
 def _safe_initialize_localities(*args, **kwargs):
@@ -74,6 +85,9 @@ localization.initialize_localities = _safe_initialize_localities
 
 
 class Theme:
+    # Incremented by apply(). Handlers registered through bind_theme_change
+    # run once per increment, not once per <<ThemeChanged>> event.
+    generation = 0
     FONT_FAMILY = (
         "Helvetica Neue"
         if sys.platform == "darwin"
@@ -149,6 +163,27 @@ class Theme:
                     label = f.replace(".tcl", "").replace("_", " ").capitalize()
                     custom_themes[label] = os.path.join(theme_dir, f)
         return custom_themes
+
+    @classmethod
+    def bind_theme_change(cls, widget, callback, application_wide=True):
+        """Run ``callback`` once each time Theme.apply() changes the theme.
+
+        ttkbootstrap also emits <<ThemeChanged>> whenever it builds a style for
+        a newly created bootstyle widget, which happens dozens of times during
+        startup and on every pick. Panels bound directly to the event treated
+        each one as a full theme change and re-rendered themselves, stalling
+        the UI for seconds. The gate compares Theme.generation instead.
+        """
+        state = {"seen": cls.generation}
+
+        def handler(event=None):
+            if state["seen"] == cls.generation:
+                return
+            state["seen"] = cls.generation
+            callback(event)
+
+        binder = widget.bind_all if application_wide else widget.bind
+        binder("<<ThemeChanged>>", handler, add="+")
 
     @classmethod
     def apply(cls, root, palette="Neutral", engine=None, custom_path="", scale=1.0):
@@ -374,4 +409,5 @@ class Theme:
             "Card.TFrame", background=cls.BG_PRIMARY, relief="flat", borderwidth=0
         )
         root.configure(bg=cls.BG_PRIMARY)
+        cls.generation += 1
         root.event_generate("<<ThemeChanged>>")

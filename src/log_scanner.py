@@ -457,9 +457,6 @@ class ArenaScanner:
         events = [
             i for i in constants.LIMITED_TYPES_DICT for x in event_sections if i in x
         ]
-        # "Y26_FRA_Bot_Draft_<date>" splits into "Bot" and "Draft"; neither
-        # matches a known type, so these bot drafts fell through to the human
-        # catch-all and their pack/pick lines were never read.
         if not events and "Bot" in event_sections and "Draft" in event_sections:
             events.append(constants.LIMITED_TYPE_STRING_DRAFT_QUICK)
 
@@ -1155,6 +1152,13 @@ class ArenaScanner:
             data, _ = self.tier_list.retrieve_data(event_set)
             return data
 
+    @staticmethod
+    def _has_win_rate(value) -> bool:
+        try:
+            return float(value) > 0.0
+        except (TypeError, ValueError):
+            return False
+
     def retrieve_color_win_rate(self, label_type):
         with self.lock:
             deck_colors = {}
@@ -1174,7 +1178,9 @@ class ArenaScanner:
                         if std_key in ratings:
                             display_label = f"{display_label} ({ratings[std_key]}%)"
                         deck_colors[filter_key] = display_label
-                    elif std_key in ratings:
+                    elif std_key in ratings and self._has_win_rate(ratings[std_key]):
+                        # Pairs the dataset lists at 0.0% have no games behind
+                        # them; offering them only produces a table of "-".
                         deck_colors[filter_key] = (
                             f"{display_label} ({ratings[std_key]}%)"
                         )

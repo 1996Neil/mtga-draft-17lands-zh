@@ -33,7 +33,7 @@ class AdvisorPanel(tb.Frame):
         self.last_recs = []
         self.last_cards = []
         self._build_ui()
-        self.bind_all("<<ThemeChanged>>", self._on_theme_change, add="+")
+        Theme.bind_theme_change(self, self._on_theme_change)
 
     def _build_ui(self):
         if self.is_collapsible:

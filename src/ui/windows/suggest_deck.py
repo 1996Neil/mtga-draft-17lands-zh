@@ -8,6 +8,7 @@ Displays Main Deck and Sideboard in separate notebook tabs.
 Includes a 10,000 game Monte Carlo Simulation for elite pro-level analysis.
 """
 
+import queue
 import tkinter
 from tkinter import ttk
 from typing import Dict, Any, List
@@ -85,7 +86,7 @@ class SuggestDeckPanel(ttk.Frame):
             bootstyle="primary",
         )
         self.lbl_archetype.pack(side="left", padx=Theme.scaled_val(5))
-        self.bind_all("<<ThemeChanged>>", self._on_theme_change, add="+")
+        Theme.bind_theme_change(self, self._on_theme_change)
 
         self.var_archetype = tkinter.StringVar()
         self.om_archetype = ttk.OptionMenu(
@@ -906,47 +907,63 @@ class SuggestDeckPanel(ttk.Frame):
         )
         dataset_name = self.configuration.card_data.latest_dataset
 
-        def _post(fn):
-            """Queue a UI update; this callback runs on the deck-builder worker.
-
-            Tk must not be touched from here, not even winfo_exists(): doing so
-            corrupted the Tcl heap and crashed the app seconds later. Existence
-            is re-checked on the UI thread instead.
-            """
-            def guarded():
-                try:
-                    if self.winfo_exists():
-                        fn()
-                except Exception:
-                    pass
-
-            self.after(0, guarded)
+        # suggest_deck() and its progress callback run on the sim-executor
+        # pool thread. tkinter is not thread-safe: calling Tk from there
+        # (winfo_exists/after) corrupts the Tcl interpreter and crashes the
+        # app at draft completion ("Tcl_AppendFormatToObj called with shared
+        # object", macOS SIGTRAP/SIGBUS). Everything the worker produces -
+        # progress, completion and errors - goes through this queue; the
+        # main-thread drain below performs every Tk call, in order.
+        progress_q = queue.Queue()
+        self._drain_token = getattr(self, "_drain_token", 0) + 1
+        drain_token = self._drain_token
 
         def _progress_cb(msg):
-            if "status" in msg:
-                if not self.suggestions:
-                    _post(lambda: self.var_archetype.set(msg["status"]))
-                if getattr(self, "app_context", None) and hasattr(
-                    self.app_context, "loading_overlay"
-                ):
-                    _post(
-                        lambda: self.app_context.loading_overlay.update_status(
-                            msg["status"]
+            progress_q.put(msg)
+
+        def _drain_progress():
+            if not self.winfo_exists() or self._drain_token != drain_token:
+                return
+            try:
+                while True:
+                    msg = progress_q.get_nowait()
+                    try:
+                        if "status" in msg:
+                            if not self.suggestions:
+                                self.var_archetype.set(msg["status"])
+                            if getattr(self, "app_context", None) and hasattr(
+                                self.app_context, "loading_overlay"
+                            ):
+                                self.app_context.loading_overlay.update_status(
+                                    msg["status"]
+                                )
+                        elif "variant_label" in msg:
+                            lbl = msg["variant_label"]
+                            vd = msg["variant_data"]
+                            self.suggestions[lbl] = vd
+                            self.incremental_labels.append(lbl)
+                            self._update_dropdown_options(self.incremental_labels)
+
+                            if len(self.incremental_labels) == 1:
+                                self._on_deck_selection_change(lbl)
+                        elif "done" in msg:
+                            self._finalize_build(msg["done"])
+                        elif "error" in msg:
+                            self._handle_builder_error(msg["error"])
+                    except Exception:
+                        # One bad update must not kill the drain: log it and
+                        # keep applying the remaining messages.
+                        import logging
+
+                        logging.getLogger(__name__).exception(
+                            "Error applying deck-suggestion update"
                         )
-                    )
-            elif "variant_label" in msg:
-                lbl = msg["variant_label"]
-                vd = msg["variant_data"]
-
-                def _update_ui():
-                    self.suggestions[lbl] = vd
-                    self.incremental_labels.append(lbl)
-                    self._update_dropdown_options(self.incremental_labels)
-
-                    if len(self.incremental_labels) == 1:
-                        self._on_deck_selection_change(lbl)
-
-                _post(_update_ui)
+            except queue.Empty:
+                pass
+            if self._drain_token == drain_token and (
+                self.is_building or not progress_q.empty()
+            ):
+                self.after(100, _drain_progress)
 
         def _worker():
             try:
@@ -960,12 +977,11 @@ class SuggestDeckPanel(ttk.Frame):
                     _progress_cb,
                     dataset_name,
                 )
-                self.after(0, lambda: self._finalize_build(raw_results))
+                progress_q.put({"done": raw_results})
             except Exception as e:
-                # Bind the message now: `e` is unbound once the except block
-                # exits, before Tk runs the callback.
-                self.after(0, lambda msg=str(e): self._handle_builder_error(msg))
+                progress_q.put({"error": str(e)})
 
+        self.after(100, _drain_progress)
         self.sim_executor.submit(_worker)
 
     def _finalize_build(self, sorted_decks):
