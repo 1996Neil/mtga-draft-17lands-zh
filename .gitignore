@@ -201,3 +201,7 @@ node_modules/
 
 # Local rollback copy of the bundled English snapshot
 resources/arena/*.bak.json
+
+# PyInstaller output from local rebuilds
+/dist-*/
+/build-*/
