@@ -457,6 +457,12 @@ class ArenaScanner:
         events = [
             i for i in constants.LIMITED_TYPES_DICT for x in event_sections if i in x
         ]
+        # "Y26_FRA_Bot_Draft_<date>" splits into "Bot" and "Draft"; neither
+        # matches a known type, so these bot drafts fell through to the human
+        # catch-all and their pack/pick lines were never read.
+        if not events and "Bot" in event_sections and "Draft" in event_sections:
+            events.append(constants.LIMITED_TYPE_STRING_DRAFT_QUICK)
+
         if not events and [
             i
             for i in constants.DRAFT_DETECTION_CATCH_ALL

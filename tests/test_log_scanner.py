@@ -515,3 +515,31 @@ def test_log_suspend(session_scanner):
     # Unsuspend it
     session_scanner.log_suspend(False)
     assert session_scanner.draft_log.level == logging.INFO
+
+
+# Upstream 4.25 (#214): "Y26_FRA_Bot_Draft_<date>" splits on "_" into "Bot" and
+# "Draft", matching no known type, so it used to fall through to the human
+# PremierDraft catch-all and the bot-draft pack/pick lines were never read.
+FRA_BOT_DRAFT_EVENT = r'[UnityCrossThreadLogger]==> EventJoin {"id":"450a2b19-8439-46ab-98e8-668b70e5bc12","request":"{\"EventName\":\"Y26_FRA_Bot_Draft_20261017\",\"EntryCurrencyType\":\"None\",\"EntryCurrencyPaid\":0,\"CustomTokenId\":null,\"EventChoice\":\"\",\"DebugIgnoreEntryLimits\":false}"}'
+FRA_BOT_DRAFT_STATUS_P1P1 = r'{"CurrentModule":"BotDraft","Payload":"{\"Result\":\"Success\",\"EventName\":\"Y26_FRA_Bot_Draft_20261017\",\"DraftStatus\":\"PickNext\",\"PackNumber\":0,\"PickNumber\":0,\"NumCardsToPick\":1,\"DraftPack\":[\"106360\",\"106259\",\"106355\",\"106272\",\"106237\"],\"PackStyles\":[],\"PickedCards\":[],\"PickedStyles\":[]}"}'
+
+
+def test_bot_draft_event_name_is_quick_draft(function_scanner):
+    with open(TEST_LOG_FILE_LOCATION, "a", encoding="utf-8") as log_file:
+        log_file.write(FRA_BOT_DRAFT_EVENT + "\n")
+
+    assert function_scanner.draft_start_search()
+    assert function_scanner.retrieve_current_limited_event() == ("FRA", "QuickDraft")
+
+
+def test_bot_draft_event_name_reads_pack_and_pick(function_scanner):
+    with open(TEST_LOG_FILE_LOCATION, "a", encoding="utf-8") as log_file:
+        log_file.write(FRA_BOT_DRAFT_EVENT + "\n")
+
+    assert function_scanner.draft_start_search()
+
+    with open(TEST_LOG_FILE_LOCATION, "a", encoding="utf-8") as log_file:
+        log_file.write(FRA_BOT_DRAFT_STATUS_P1P1 + "\n")
+
+    assert function_scanner.draft_data_search()
+    assert function_scanner.retrieve_current_pack_and_pick() == (1, 1)
