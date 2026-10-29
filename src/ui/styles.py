@@ -8,6 +8,15 @@ without cross-polluting the state.
 import tkinter
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+
+# ttkbootstrap 2 only ships styled widgets as subclasses and leaves stock
+# tkinter.ttk untouched, so `bootstyle=` on a vanilla widget raises
+# "unknown option -bootstyle". This code base was written against 1.x, where the
+# global patch was always applied; re-enable it explicitly (idempotent).
+try:
+    ttk.enable_global_api()
+except AttributeError:  # ttkbootstrap 1.x patches on import already
+    pass
 import sys
 import os
 import re
