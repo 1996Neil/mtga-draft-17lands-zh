@@ -148,6 +148,30 @@ GPUSH_PROXY=http://127.0.0.1:7890 gpush push
 HTTPS_PROXY=http://127.0.0.1:7897 gh auth status
 ```
 
+### 跟上游新版
+
+上游发新 release 后，不要再手工挑补丁——仓库里已经记录了 `upstream-4.27` 这个合并父节点，直接合就行：
+
+```bash
+cd ~/Documents/ChatGPT/mtga-draft-17lands-zh-20261010
+
+# 1) 只取那一个 tag 的提交（浅取，别拉全量历史，上游有 600MB）
+git -c http.proxy=http://127.0.0.1:7897 fetch --depth 1 upstream \
+  refs/tags/MTGA_Draft_Tool_V0430:refs/tags/upstream-4.30
+
+# 2) 直接合并
+git merge upstream-4.30
+```
+
+冲突处理原则：**上游已经替代我们本地临时方案的地方取上游**（例如 `suggest_deck` 的线程队列），**用户可见字符串继续包 `tr()`**，中文资源（`resources/localization/`、`resources/arena/english.json`）保持我们自己的。
+
+合完必须做三件事：
+
+1. `grep -n "APPLICATION_VERSION" src/constants.py` —— 确认版本号跟上了，否则又会弹更新提示
+2. 跑测试：`build-venv2/bin/python -m pytest tests -q --ignore=tests/server`
+3. 如果动了 `src/card_logic.py` 等计算核心，记得同步更新
+   `tests/test_chinese_display.py` 里记录的哈希基线
+
 ### 改代码后重新构建
 
 ```bash
