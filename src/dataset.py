@@ -411,6 +411,8 @@ class Dataset:
             ]
             made_new_cache_entries = False
             consecutive_failures = 0
+            if getattr(type(self), "_scryfall_unavailable", False):
+                unknown_ids_to_fetch = []
             for chunk in chunks:
                 # Scryfall throttles us and every attempt blocks for the whole
                 # timeout; after two failures in a row, stop for this session
@@ -472,6 +474,9 @@ class Dataset:
                     from src.logger import create_logger
 
                     create_logger().error(f"Scryfall bulk resolve failed: {e}")
+
+            if consecutive_failures >= 2:
+                type(self)._scryfall_unavailable = True
 
             for aid in unknown_ids_to_fetch:
                 if aid not in result_map:

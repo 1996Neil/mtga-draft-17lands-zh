@@ -139,6 +139,10 @@ class DatasetUpdater:
 
     def sync_datasets(self, progress_callback):
         """Install only confined, checksum-verified, bounded and valid datasets."""
+        # Opt-in only: a stale caller must not repopulate the folder with every
+        # live-set format after the user has cleaned it up.
+        if not self.config.settings.auto_sync_datasets:
+            return
         try:
             try:
                 report_resp = requests.get(
