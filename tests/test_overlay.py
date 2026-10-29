@@ -85,6 +85,12 @@ def test_header_drag_bindings_cover_child_labels(mock_wm, mock_ov, root, mock_ap
         assert widget.bind("<B1-Motion>"), "label must move the window"
         assert widget.bind("<ButtonRelease-1>"), "label must end the drag"
 
+    # Pressing on the status label (the "P0 / P0" text) must really start a drag.
+    overlay.update_idletasks()
+    overlay.lbl_status.event_generate("<ButtonPress-1>", x=4, y=4)
+    overlay.update()
+    assert overlay._drag_offset is not None
+
 
 @patch("tkinter.Toplevel.overrideredirect")
 @patch("tkinter.Toplevel.wm_overrideredirect")
