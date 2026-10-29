@@ -154,18 +154,19 @@ HTTPS_PROXY=http://127.0.0.1:7897 gh auth status
 cd ~/Documents/ChatGPT/mtga-draft-17lands-zh-20261010
 
 # 测试
-/path/to/user/Documents/harness_newstart/draft17lands-fix/build-venv/bin/python \
+/path/to/user/Documents/harness_newstart/draft17lands-fix/build-venv2/bin/python \
   -m pytest tests -q --ignore=tests/server
 
 # 打包
-/path/to/user/Documents/harness_newstart/draft17lands-fix/build-venv/bin/pyinstaller \
+/path/to/user/Documents/harness_newstart/draft17lands-fix/build-venv2/bin/pyinstaller \
   candidate.spec --noconfirm --distpath dist-YYYYMMDD --workpath build-YYYYMMDD
 
 # 签名
 codesign --force --deep --sign - dist-YYYYMMDD/MTGA_17Lands_ZH_Candidate.app
 ```
 
-构建环境在 `~/Documents/harness_newstart/draft17lands-fix/build-venv`（381 MB，别删，重装要十分钟）。
+构建环境在 `~/Documents/harness_newstart/draft17lands-fix/build-venv2`（约 400 MB，别删，重装要十分钟）。
+依赖版本已对齐上游 4.27：Pillow 13、ttkbootstrap 2.2.5、numpy 2.5.4、numba 0.68.1、scipy 1.18.1、pyinstaller 6.22.3。
 
 ---
 
@@ -180,7 +181,7 @@ codesign --force --deep --sign - dist-YYYYMMDD/MTGA_17Lands_ZH_Candidate.app
 | 配置 | 同上 `config.json` |
 | 日志 | 同上 `Debug/debug.log` |
 | 数据集 | 同上 `Sets/` |
-| 构建环境 | `~/Documents/harness_newstart/draft17lands-fix/build-venv/` |
+| 构建环境 | `~/Documents/harness_newstart/draft17lands-fix/build-venv2/` |
 | 推送脚本 | `~/.local/bin/gpush` |
 
 ---
