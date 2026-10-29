@@ -47,25 +47,43 @@ def test_compact_overlay_initialization_and_drag(
     overlay = CompactOverlay(root, mock_app_context, config, lambda: None)
     assert overlay.winfo_exists()
 
-    # Simulate a drag event
+    # Dragging now anchors on root coordinates so a press on a header label
+    # (not the frame itself) does not make the window jump.
+    overlay.winfo_x = MagicMock(return_value=300)
+    overlay.winfo_y = MagicMock(return_value=300)
+    overlay.geometry = MagicMock()
+    overlay._save_geometry = MagicMock()
+
     class DragEvent:
         x = 100
         y = 50
+        x_root = 400
+        y_root = 350
 
     overlay._start_move(DragEvent())
-    assert overlay.x == 100
-    assert overlay.y == 50
+    assert overlay._drag_offset == (100, 50)
 
-    # Simulate moving 50px right
     class MoveEvent:
-        x = 150
-        y = 50
+        x_root = 450
+        y_root = 350
 
     overlay._do_move(MoveEvent())
+    overlay.geometry.assert_called_with("+350+300")
 
-    # Simulate stop drag
     overlay._stop_move(DragEvent())
-    assert overlay.x is None
+    assert overlay._drag_offset is None
+    overlay._save_geometry.assert_called_once()
+
+
+@patch("tkinter.Toplevel.overrideredirect")
+@patch("tkinter.Toplevel.wm_overrideredirect")
+def test_header_drag_bindings_cover_child_labels(mock_wm, mock_ov, root, mock_app_context):
+    """The header is covered by labels; they must inherit the drag handlers."""
+    overlay = CompactOverlay(root, mock_app_context, Configuration(), lambda: None)
+    for widget in (overlay.lbl_info, overlay.lbl_status):
+        assert widget.bind("<ButtonPress-1>"), "label must start a drag"
+        assert widget.bind("<B1-Motion>"), "label must move the window"
+        assert widget.bind("<ButtonRelease-1>"), "label must end the drag"
 
 
 @patch("tkinter.Toplevel.overrideredirect")

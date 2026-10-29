@@ -56,21 +56,39 @@ class CompactOverlay(tb.Toplevel):
 
         self._build_ui()
 
+    def _bind_drag(self, widget):
+        """Make the whole header draggable, labels included.
+
+        Tk delivers a click to the widget under the pointer and then to its
+        class and toplevel bind tags, never to the parent frame. The header is
+        covered by its info/status labels, so binding only the frame left a thin
+        strip that actually moved the window.
+        """
+        widget.bind("<ButtonPress-1>", self._start_move, add="+")
+        widget.bind("<B1-Motion>", self._do_move, add="+")
+        widget.bind("<ButtonRelease-1>", self._stop_move, add="+")
+        for child in widget.winfo_children():
+            if child.winfo_class() in ("TButton", "Button"):
+                continue  # Keep the header buttons clickable.
+            self._bind_drag(child)
+
     def _start_move(self, event):
-        self.x = event.x
-        self.y = event.y
+        # Anchor on root coordinates so dragging from a child label does not
+        # jump when the pointer crosses widget boundaries.
+        self._drag_offset = (
+            event.x_root - self.winfo_x(),
+            event.y_root - self.winfo_y(),
+        )
 
     def _stop_move(self, event):
-        self.x = None
-        self.y = None
+        self._drag_offset = None
         self._save_geometry()
 
     def _do_move(self, event):
-        deltax = event.x - self.x
-        deltay = event.y - self.y
-        x = self.winfo_x() + deltax
-        y = self.winfo_y() + deltay
-        self.geometry(f"+{x}+{y}")
+        if getattr(self, "_drag_offset", None) is None:
+            return
+        offset_x, offset_y = self._drag_offset
+        self.geometry(f"+{event.x_root - offset_x}+{event.y_root - offset_y}")
 
     def _start_resize(self, event):
         self._start_w = self.winfo_width()
@@ -103,9 +121,7 @@ class CompactOverlay(tb.Toplevel):
         header = tb.Frame(self, bootstyle="secondary")
         header.pack(fill=X, ipady=Theme.scaled_val(5))
 
-        header.bind("<ButtonPress-1>", self._start_move)
-        header.bind("<ButtonRelease-1>", self._stop_move)
-        header.bind("<B1-Motion>", self._do_move)
+        self._drag_offset = None
 
         # Dynamic Info Label (Format | Group | Filter)
         self.lbl_info = tb.Label(
@@ -129,6 +145,10 @@ class CompactOverlay(tb.Toplevel):
             bootstyle="inverse-secondary",
         )
         self.lbl_status.pack(side=RIGHT, padx=Theme.scaled_val(5))
+
+        # Bind last: the header's children must exist before they can inherit
+        # the drag handlers.
+        self._bind_drag(header)
 
         # --- FOOTER (Resize Grip) ---
         footer = tb.Frame(self, bootstyle="secondary")
