@@ -194,6 +194,36 @@ codesign --force --deep --sign - dist-YYYYMMDD/MTGA_17Lands_ZH_Candidate.app
 
 ---
 
+## CI（GitHub Actions）
+
+仓库里保留了两个工作流，行为已经在 2026-10-31 收敛过：
+
+| 工作流 | 触发 | 干什么 |
+|---|---|---|
+| `publish-release.yml`（Build & Publish Release） | 只有打 `v*` tag 或手动触发 | 三平台打包、建 Release；产物保留 1 天 |
+| `etl-pipeline.yml`（Daily Dataset ETL） | 每天 10:23 / 16:41 UTC + 手动 | 拉 17Lands 数据，生成数据集推到 `gh-pages` |
+
+**为什么 push 不再触发构建**：这个工作流每次跑会给三个平台各上传约 200 MB 制品，免费私有仓库只有 500 MB 配额，几次就满（报 `Artifact storage quota has been hit`）。我们本机打包，CI 产物用不到。
+
+### 两个坑
+
+1. **改了 `pyproject.toml` 一定要重新生成锁文件**，否则 CI 第一句 `poetry install` 就会退出：
+
+   ```bash
+   build-venv2/bin/poetry lock
+   build-venv2/bin/poetry check --lock
+   ```
+
+   2026-10-29 那天 ETL 和三平台打包全部失败，就是这一条。
+
+2. **ETL 第一次运行需要初始化仓库**。没有 `gh-pages` 分支时它拒绝自己创建，会报 `Cannot restore gh-pages; refusing to replace the warehouse.`，手动跑一次：
+
+   ```bash
+   gh workflow run etl-pipeline.yml -R 1996Neil/mtga-draft-17lands-zh -f initialize_warehouse=true
+   ```
+
+   建好之后定时任务就能增量跑了。
+
 ## 五、文件索引
 
 | 内容 | 位置 |
