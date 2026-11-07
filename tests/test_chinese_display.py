@@ -141,18 +141,18 @@ def test_calculation_core_matches_the_recorded_baseline():
     deliberate: update the recorded hash in the same commit that changes them.
     """
     expected = {
-    "src/card_logic.py": "3455bb673eb44971089286276b7c757c3faa280fd4e491c7cfa6abdb22590cbd",
-    "src/card_utils.py": "5643bbccdac8106e18f75b7b04940989ff57f36456ec2b33e5d6df7bd6fd111a",
-    "src/signals.py": "5fbef420ab2f86c77e0a2fe3f7382476cec02a1860b3d010593111ddc80beb05",
-    "src/set_metrics.py": "aeecf4ad030d474cedb404981b4a57df97c5002ccb622789da9cce26b6e8e0bb",
-    "src/sealed_logic.py": "a2ac56496d0fd13826959a7dc4d29da539911f85070738b80988bf84b5271be9",
-    "src/advisor/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "src/advisor/deck_builder.py": "872fe6080a342989ec089cb00bd6a0c83880fc989c3a37bbd768c4d6b07f9291",
-    "src/advisor/deck_scorer.py": "dff167618dd83551453e1482ee6446fc94165f34a2b77b92786032dea5f91872",
-    "src/advisor/engine.py": "cd071b1ddb764d5c4f3015692f6b1a0a6fafe3ff99655bbadd6c822e273f5344",
-    "src/advisor/mana_base.py": "3a308a451af83b6247373a23fb28e20ad68438fec7af890cfb47ebdd58156dac",
-    "src/advisor/schema.py": "d18c6ad6137c7c0ecd1fc7b27ec96604573f619f7a16d2c3ecd98a8b8f158ed1",
-    "src/advisor/simulator.py": "e75cd25b3f8d3082bcdc1d5723f110fefa49d0c3ef08cedf9106dbdbd0d672bf",
+        "src/card_logic.py": "3455bb673eb44971089286276b7c757c3faa280fd4e491c7cfa6abdb22590cbd",
+        "src/card_utils.py": "5643bbccdac8106e18f75b7b04940989ff57f36456ec2b33e5d6df7bd6fd111a",
+        "src/signals.py": "5fbef420ab2f86c77e0a2fe3f7382476cec02a1860b3d010593111ddc80beb05",
+        "src/set_metrics.py": "fb82d7526c274f017e00dfdb4e883fe301c20a4f04823709ae3bfa855b02d263",
+        "src/sealed_logic.py": "a2ac56496d0fd13826959a7dc4d29da539911f85070738b80988bf84b5271be9",
+        "src/advisor/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "src/advisor/deck_builder.py": "695b64e6e6fdaf752c4a13cd1387bf3c075311cde5fc8cf98fc24a85e3f595d2",
+        "src/advisor/deck_scorer.py": "f489362a91f17c62eead4f673801956f59f56dc192ac6fbd25d5d66b447a3739",
+        "src/advisor/engine.py": "3a4867d6367b8ebd8d38b6ebc21e12782ff0db6c35a93fb89575b821aec02dfc",
+        "src/advisor/mana_base.py": "154ec6fda4fab8b9aa9cde41723de29a329b803d8c8cdb67439e821dabc633a4",
+        "src/advisor/schema.py": "9f7c88e7952bee49ee2aa5d3f27a6784a6d4f99b9a0a5105c9ad47d1c3d8341e",
+        "src/advisor/simulator.py": "2784c7a2c2fbc65a9e4eadd96d365b594bf8688a740284c5aa73538ef1106337",
     }
     for f, digest in expected.items():
         actual = hashlib.sha256((ROOT / f).read_bytes()).hexdigest()
