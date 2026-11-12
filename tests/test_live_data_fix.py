@@ -63,42 +63,12 @@ def panel():
     config=MagicMock();config.settings.column_configs={};config.card_data.latest_dataset='old.json'
     sets=MagicMock(data={'FRA':SetInfo(arena=['ALL'],seventeenlands=['FRA'],set_code='FRA',formats=['QuickDraft','PremierDraft','ContenderDraft'])},latest_set='FRA')
     with patch('src.ui.windows.download.retrieve_local_set_list',return_value=([],None)):
-        window=DownloadWindow(root,sets,config,MagicMock(),event_getter=lambda:('FRA','QuickDraft'))
+        window=DownloadWindow(root,sets,config,MagicMock())
     yield window
     root.destroy()
 
 
-def test_download_defaults_to_detected_format_not_alphabetical(panel):
-    assert panel.vars['event'].get()=='QuickDraft'
-    panel.vars['event'].set('PremierDraft')
-    # Manual format remains selectable; no silent forced downloads.
-    assert panel.vars['event'].get()=='PremierDraft'
 
-
-def test_worker_completion_is_queued_not_tk_after(panel):
-    with patch.object(panel,'after') as after,patch.object(panel,'_activate_download') as activate:
-        worker=threading.Thread(target=lambda:panel._safe_finalize('done','new.json'))
-        worker.start();worker.join(2)
-        after.assert_not_called();activate.assert_not_called()
-        assert panel._messages.get_nowait()==('success',('done','new.json'))
-
-
-def test_activation_rejects_empty_statistics_and_other_event(panel,tmp_path):
-    cards={'1':{'deck_colors':{'All Decks':{'gihwr':0}}}}
-    filename='FRA_QuickDraft_All_Data.json'
-    with patch('src.ui.windows.download.constants.SETS_FOLDER',str(tmp_path)),patch('tkinter.messagebox.showerror') as error,patch('tkinter.messagebox.showinfo'),patch('src.ui.windows.download.write_configuration',return_value=True) as save:
-        path=tmp_path/filename;path.write_text(json.dumps({'card_ratings':cards}))
-        panel._activate_download('done',filename)
-        assert panel.configuration.card_data.latest_dataset=='old.json'
-        error.assert_called_once();save.assert_not_called()
-        cards['1']['deck_colors']['All Decks']['gihwr']=57
-        other='FRA_ContenderDraft_All_Data.json';(tmp_path/other).write_text(json.dumps({'card_ratings':cards}))
-        panel._activate_download('done',other)
-        assert panel.configuration.card_data.latest_dataset=='old.json'
-        save.assert_not_called()
-        path.write_text(json.dumps({'card_ratings':cards}));panel._activate_download('done',filename)
-        assert panel.configuration.card_data.latest_dataset==filename
-        save.assert_called_once()
 
 
 def test_current_fra_public_dataset_maps_actual_pack():

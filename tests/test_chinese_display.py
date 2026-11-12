@@ -149,7 +149,7 @@ def test_calculation_core_matches_the_recorded_baseline():
         "src/advisor/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "src/advisor/deck_builder.py": "695b64e6e6fdaf752c4a13cd1387bf3c075311cde5fc8cf98fc24a85e3f595d2",
         "src/advisor/deck_scorer.py": "f489362a91f17c62eead4f673801956f59f56dc192ac6fbd25d5d66b447a3739",
-        "src/advisor/engine.py": "3a4867d6367b8ebd8d38b6ebc21e12782ff0db6c35a93fb89575b821aec02dfc",
+        "src/advisor/engine.py": "099274ca26e599bac7e4e7569d98050b89f365206524ccd44c51d824a96903f7",
         "src/advisor/mana_base.py": "154ec6fda4fab8b9aa9cde41723de29a329b803d8c8cdb67439e821dabc633a4",
         "src/advisor/schema.py": "9f7c88e7952bee49ee2aa5d3f27a6784a6d4f99b9a0a5105c9ad47d1c3d8341e",
         "src/advisor/simulator.py": "2784c7a2c2fbc65a9e4eadd96d365b594bf8688a740284c5aa73538ef1106337",

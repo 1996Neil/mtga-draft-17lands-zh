@@ -144,7 +144,6 @@ class AppLayoutManager:
             self.app.orchestrator.scanner.set_list,
             self.config,
             self.app._on_dataset_update,
-            event_getter=self.app.orchestrator.scanner.retrieve_current_limited_event,
         )
         self.panel_tiers = TierListWindow(
             self.notebook, self.config, self.app._refresh_ui_data

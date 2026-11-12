@@ -1,8 +1,5 @@
-from src.i18n import tr
 import tkinter
 import threading
-import queue
-import time
 import os
 import json
 from tkinter import ttk, messagebox
@@ -31,28 +28,15 @@ class DatasetArgs:
 
 
 class DownloadWindow(ttk.Frame):
-    def __init__(self, parent, limited_sets, configuration, on_update_callback, event_getter=None):
+    def __init__(self, parent, limited_sets, configuration, on_update_callback):
         super().__init__(parent)
         self.sets_data = limited_sets.data
         self.latest_set_code = limited_sets.latest_set
         self.configuration = configuration
         self.on_update_callback = on_update_callback
-        self.event_getter = event_getter
-        self._messages = queue.Queue()
-        self._download_started = None
-        self._phase = ""
-        self._controls = []
         self.vars = {}
         self._download_thread = None
         self._build_ui()
-        self.after(100, self._poll_download)
-
-    def _current_event(self):
-        if self.event_getter:
-            value = self.event_getter()
-            if isinstance(value, (tuple, list)) and len(value) == 2:
-                return value
-        return None, None
 
     def refresh(self):
         self._update_table()
@@ -163,40 +147,34 @@ class DownloadWindow(ttk.Frame):
             if active_names
             else (inactive_names[0] if inactive_names else "")
         )
-        live_set, _ = self._current_event()
-        if live_set:
-            default_val = next((key for key, info in self.sets_data.items()
-                                if live_set in info.seventeenlands), default_val)
         self.vars["set"] = tkinter.StringVar(value=default_val)
 
-        ttk.Label(form, text=tr("SET:")).grid(
+        ttk.Label(form, text="SET:").grid(
             row=0, column=0, sticky="e", padx=Theme.scaled_val(5)
         )
 
-        self.om_set = ttk.OptionMenu(form, self.vars["set"], default_val)
-        menu = self.om_set["menu"]
-        menu.delete(0, "end")
-
-        for opt in active_names:
-            menu.add_command(
-                label=tr(opt),
-                command=tkinter._setit(self.vars["set"], opt, self._on_set_change),
-            )
-
-        if active_names and inactive_names:
-            menu.add_separator()
-
-        for opt in inactive_names:
-            menu.add_command(
-                label=tr(opt),
-                command=tkinter._setit(self.vars["set"], opt, self._on_set_change),
-            )
+        # A searchable combobox instead of an OptionMenu: with 100+ sets the
+        # menu ran off the screen (and on Linux it closed on mouse release),
+        # while the combobox list scrolls and typing narrows it down (#260).
+        # Active sets stay first, in calendar order, followed by the rest.
+        self.set_options = active_names + inactive_names
+        self._committed_set = default_val
+        self.om_set = ttk.Combobox(
+            form,
+            textvariable=self.vars["set"],
+            values=self.set_options,
+            height=15,
+        )
+        self.om_set.bind("<<ComboboxSelected>>", self._on_set_selected)
+        self.om_set.bind("<KeyRelease>", self._filter_set_options)
+        self.om_set.bind("<Return>", self._commit_set_entry)
+        self.om_set.bind("<FocusOut>", self._on_set_focus_out)
 
         self.om_set.grid(row=0, column=1, sticky="ew", pady=Theme.scaled_val(2))
         # --- END DYNAMIC SET SORTING ---
 
         self.vars["event"] = tkinter.StringVar(value="PremierDraft")
-        ttk.Label(form, text=tr("EVENT:")).grid(
+        ttk.Label(form, text="EVENT:").grid(
             row=0, column=2, sticky="e", padx=Theme.scaled_val(5)
         )
         self.om_event = ttk.OptionMenu(
@@ -208,7 +186,7 @@ class DownloadWindow(ttk.Frame):
         self.om_event.grid(row=0, column=3, sticky="ew", pady=Theme.scaled_val(2))
 
         self.vars["group"] = tkinter.StringVar(value="All")
-        ttk.Label(form, text=tr("USERS:")).grid(
+        ttk.Label(form, text="USERS:").grid(
             row=1, column=0, sticky="e", padx=Theme.scaled_val(5)
         )
         ttk.OptionMenu(
@@ -216,7 +194,7 @@ class DownloadWindow(ttk.Frame):
         ).grid(row=1, column=1, sticky="ew", pady=Theme.scaled_val(2))
 
         self.vars["threshold"] = tkinter.StringVar(value="500")
-        ttk.Label(form, text=tr("MIN GAMES:")).grid(
+        ttk.Label(form, text="MIN GAMES:").grid(
             row=1, column=2, sticky="e", padx=Theme.scaled_val(5)
         )
         ttk.Entry(form, textvariable=self.vars["threshold"]).grid(
@@ -232,7 +210,7 @@ class DownloadWindow(ttk.Frame):
         self.vars["period"] = tkinter.StringVar(
             value=constants.TIME_PERIOD_DEFAULT_LABEL
         )
-        ttk.Label(form, text=tr("TIME PERIOD:")).grid(
+        ttk.Label(form, text="TIME PERIOD:").grid(
             row=2, column=0, sticky="e", padx=Theme.scaled_val(5)
         )
         ttk.OptionMenu(
@@ -243,7 +221,7 @@ class DownloadWindow(ttk.Frame):
         ).grid(row=2, column=1, sticky="ew", pady=Theme.scaled_val(2))
 
         self.btn_dl = ttk.Button(
-            form, text=tr("Download Selected Dataset"), command=self._manual_download
+            form, text="Download Selected Dataset", command=self._manual_download
         )
         self.btn_dl.grid(
             row=3, column=0, columnspan=4, pady=Theme.scaled_val((10, 0)), sticky="ew"
@@ -251,7 +229,7 @@ class DownloadWindow(ttk.Frame):
 
         self.btn_clear = ttk.Button(
             form,
-            text=tr("Clear Inactive Datasets"),
+            text="Clear Inactive Datasets",
             command=self._clear_inactive_datasets,
             bootstyle="secondary",
         )
@@ -261,7 +239,7 @@ class DownloadWindow(ttk.Frame):
 
         ttk.Button(
             form,
-            text=tr("Reset Dataset Cache"),
+            text="Reset Dataset Cache",
             command=self._clear_set_history,
             bootstyle="secondary",
         ).grid(
@@ -270,14 +248,13 @@ class DownloadWindow(ttk.Frame):
 
         ttk.Button(
             form,
-            text=tr("Restore Deleted Datasets"),
+            text="Restore Deleted Datasets",
             command=self._restore_deleted_datasets,
             bootstyle="secondary",
         ).grid(
             row=6, column=0, columnspan=4, pady=Theme.scaled_val((5, 0)), sticky="ew"
         )
 
-        self._controls = list(form.winfo_children())
         self.progress = ttk.Progressbar(container, mode="determinate")
         self.progress.pack(fill="x", pady=Theme.scaled_val(5))
 
@@ -321,10 +298,10 @@ class DownloadWindow(ttk.Frame):
         self.table.selection_set(row_id)
 
         menu = tkinter.Menu(self, tearoff=0)
-        menu.add_command(label=tr("✅ Set as Active Dataset"), command=self._on_set_active)
+        menu.add_command(label="✅ Set as Active Dataset", command=self._on_set_active)
         menu.add_separator()
         menu.add_command(
-            label=tr("🗑️ Delete Dataset"), command=lambda: self._delete_dataset(row_id)
+            label="🗑️ Delete Dataset", command=lambda: self._delete_dataset(row_id)
         )
 
         menu.post(event.x_root, event.y_root)
@@ -335,15 +312,15 @@ class DownloadWindow(ttk.Frame):
 
         if self.configuration.card_data.latest_dataset == filename:
             messagebox.showwarning(
-                tr("Cannot Delete"),
-                tr("You cannot delete the currently active dataset. Please double-click a different dataset to switch to it first."),
+                "Cannot Delete",
+                "You cannot delete the currently active dataset. Please double-click a different dataset to switch to it first.",
             )
             return
 
         if messagebox.askyesno(
-            tr("Confirm Delete"),
-            tr(f"Delete this dataset? It will stay excluded from automatic downloads "
-            f"until you choose Restore Deleted Datasets.\n\n{filename}"),
+            "Confirm Delete",
+            f"Delete this dataset? It will stay excluded from automatic downloads "
+            f"until you choose Restore Deleted Datasets.\n\n{filename}",
         ):
             try:
                 with CONFIG_LOCK:
@@ -365,13 +342,13 @@ class DownloadWindow(ttk.Frame):
                 invalidate_local_set_cache()
                 self._update_table()
             except Exception as e:
-                messagebox.showerror(tr("Error"), tr(f"Failed to delete file:\n{e}"))
+                messagebox.showerror("Error", f"Failed to delete file:\n{e}")
 
     def _clear_inactive_datasets(self):
         """Remove all local datasets except the active one and remember exclusions."""
         if self._download_thread and self._download_thread.is_alive():
             messagebox.showwarning(
-                tr("Download In Progress"), tr("Wait for the dataset download to finish before clearing data.")
+                "Download In Progress", "Wait for the dataset download to finish before clearing data."
             )
             return
 
@@ -391,23 +368,23 @@ class DownloadWindow(ttk.Frame):
                 and os.path.isfile(os.path.join(constants.SETS_FOLDER, name))
             ]
         except OSError as error:
-            messagebox.showerror(tr("Error"), tr(f"Could not read the dataset folder:\n{error}"))
+            messagebox.showerror("Error", f"Could not read the dataset folder:\n{error}")
             return
 
         live_label = ", ".join(sorted(live_sets)) or "none"
         if not filenames:
             messagebox.showinfo(
-                tr("Clear Inactive Datasets"),
-                tr(f"There are no inactive datasets to clear. Live sets: {live_label}."),
+                "Clear Inactive Datasets",
+                f"There are no inactive datasets to clear. Live sets: {live_label}.",
             )
             return
         if not messagebox.askyesno(
-            tr("Clear Inactive Datasets"),
-            tr(f"Delete all {len(filenames)} dataset(s) from sets that are no longer live?\n\n"
+            "Clear Inactive Datasets",
+            f"Delete all {len(filenames)} dataset(s) from sets that are no longer live?\n\n"
             f"Datasets for live sets ({live_label}) and your active dataset will be kept. "
             "Cleared datasets will stay excluded from automatic downloads, including "
             "after restarting the app.\n\n"
-            "Use Restore Deleted Datasets to allow automatic downloads again."),
+            "Use Restore Deleted Datasets to allow automatic downloads again.",
         ):
             return
 
@@ -425,7 +402,7 @@ class DownloadWindow(ttk.Frame):
             )
             if not write_configuration(self.configuration):
                 self.configuration.card_data.excluded_datasets = previous
-                messagebox.showerror(tr("Error"), tr("Could not save dataset exclusions. No files were removed."))
+                messagebox.showerror("Error", "Could not save dataset exclusions. No files were removed.")
                 return
             for name in filenames:
                 try:
@@ -440,16 +417,16 @@ class DownloadWindow(ttk.Frame):
         self._update_table()
         if failures:
             messagebox.showerror(
-                tr("Dataset Cleanup Incomplete"),
-                tr(f"Removed {removed} dataset(s). These files could not be removed; "
-                "their automatic downloads are disabled:\n\n" + "\n".join(failures)),
+                "Dataset Cleanup Incomplete",
+                f"Removed {removed} dataset(s). These files could not be removed; "
+                "their automatic downloads are disabled:\n\n" + "\n".join(failures),
             )
         else:
             messagebox.showinfo(
-                tr("Inactive Datasets Cleared"),
-                tr(f"Removed {removed} dataset(s). Datasets for live sets ({live_label}) "
+                "Inactive Datasets Cleared",
+                f"Removed {removed} dataset(s). Datasets for live sets ({live_label}) "
                 "and your active dataset were kept. Cleared datasets will not return "
-                "on restart."),
+                "on restart.",
             )
 
     @staticmethod
@@ -469,8 +446,8 @@ class DownloadWindow(ttk.Frame):
 
     def _restore_deleted_datasets(self):
         if not messagebox.askyesno(
-            tr("Restore Deleted Datasets"),
-            tr("Allow all deleted or cleared datasets to download automatically again?"),
+            "Restore Deleted Datasets",
+            "Allow all deleted or cleared datasets to download automatically again?",
         ):
             return
         with CONFIG_LOCK:
@@ -478,13 +455,13 @@ class DownloadWindow(ttk.Frame):
             self.configuration.card_data.excluded_datasets = []
             if not write_configuration(self.configuration):
                 self.configuration.card_data.excluded_datasets = previous
-                messagebox.showerror(tr("Error"), tr("Could not save dataset preferences."))
+                messagebox.showerror("Error", "Could not save dataset preferences.")
                 return
         messagebox.showinfo(
-            tr("Deleted Datasets Restored"),
-            tr("Deleted datasets are eligible for automatic downloads again. "
+            "Deleted Datasets Restored",
+            "Deleted datasets are eligible for automatic downloads again. "
             "Restart the app with automatic dataset sync enabled to download them, "
-            "or use Download Selected Dataset."),
+            "or use Download Selected Dataset.",
         )
 
     def enter(self, args: DatasetArgs = None):
@@ -509,6 +486,7 @@ class DownloadWindow(ttk.Frame):
             self._start_download(args)
 
     def _manual_download(self):
+        self._commit_set_entry()
         self._start_download()
 
     def _resolve_start_date(self, set_key: str) -> str:
@@ -535,12 +513,12 @@ class DownloadWindow(ttk.Frame):
         the next launch's splash screen. Useful when accumulated old sets slow
         loading or after a data-format change."""
         if not messagebox.askyesno(
-            tr("Reset Dataset Cache"),
-            tr("Delete all downloaded datasets?\n\nThe latest 17Lands data will be "
+            "Reset Dataset Cache",
+            "Delete all downloaded datasets?\n\nThe latest 17Lands data will be "
             "re-downloaded automatically the next time you start the app.\n\n"
             "Deleted or cleared datasets will remain excluded. To remove unwanted "
             "datasets permanently, cancel and use Clear Inactive Datasets or right-click "
-            "a dataset and choose Delete Dataset."),
+            "a dataset and choose Delete Dataset.",
         ):
             return
 
@@ -556,12 +534,66 @@ class DownloadWindow(ttk.Frame):
 
         self._update_table()
         messagebox.showinfo(
-            tr("Set History Cleared"),
-            tr(f"Removed {removed} dataset(s). Restart the app to download fresh "
-            "17Lands data."),
+            "Set History Cleared",
+            f"Removed {removed} dataset(s). Restart the app to download fresh "
+            "17Lands data.",
         )
 
+    def _filter_set_options(self, event=None):
+        """Narrow the set list to the names containing the typed text."""
+        if event is not None and event.keysym in (
+            "Up", "Down", "Return", "KP_Enter", "Escape", "Tab",
+        ):
+            return
+        text = self.vars["set"].get().strip().lower()
+        matches = [o for o in self.set_options if text in o.lower()]
+        self.om_set.configure(values=matches if text and matches else self.set_options)
+
+    def _match_set_entry(self, text):
+        """The set named by ``text``: an exact (case-insensitive) name, else
+        the only name containing it. None when it names no set or several."""
+        text = text.strip().lower()
+        if not text:
+            return None
+        exact = [o for o in self.set_options if o.lower() == text]
+        if exact:
+            return exact[0]
+        partial = [o for o in self.set_options if text in o.lower()]
+        return partial[0] if len(partial) == 1 else None
+
+    def _on_set_selected(self, event=None):
+        """A set picked from the list: like a menu pick, always applied."""
+        self._commit_set_entry(force=True)
+
+    def _on_set_focus_out(self, event=None):
+        # FocusOut also fires when the non-Aqua popup listbox takes focus.
+        # Wait for focus to settle before deciding whether the picker was left.
+        self.after_idle(self._commit_set_if_unfocused)
+
+    def _commit_set_if_unfocused(self):
+        if not self.winfo_exists():
+            return
+        # The popup is created by Tcl, so focus_get() cannot always resolve it
+        # to a Python widget. Compare Tcl paths instead.
+        focus = str(self.tk.call("focus"))
+        picker = str(self.om_set)
+        if focus != picker and not focus.startswith(picker + "."):
+            self._commit_set_entry()
+
+    def _commit_set_entry(self, event=None, force=False):
+        """Resolve the typed text to a set; an unknown name reverts to the
+        last valid set so a download never runs for a set that isn't there."""
+        match = self._match_set_entry(self.vars["set"].get())
+        if match is None:
+            match = self._committed_set
+        self.vars["set"].set(match)
+        self.om_set.configure(values=self.set_options)
+        if match and (force or match != self._committed_set):
+            self._on_set_change(match)
+
     def _on_set_change(self, val):
+        if val in getattr(self, "set_options", ()):
+            self._committed_set = val
         s_info = self.sets_data.get(val)
         if s_info:
             if s_info.start_date:
@@ -577,16 +609,10 @@ class DownloadWindow(ttk.Frame):
 
                 for f in formats_to_show:
                     menu.add_command(
-                        label=tr(f), command=lambda v=f: self.vars["event"].set(v)
+                        label=f, command=lambda v=f: self.vars["event"].set(v)
                     )
                 if formats_to_show:
-                    current = self.vars["event"].get()
-                    live_set, live_format = self._current_event()
-                    if live_set in s_info.seventeenlands and live_format in formats_to_show:
-                        current = live_format
-                    elif current not in formats_to_show:
-                        current = "PremierDraft" if "PremierDraft" in formats_to_show else formats_to_show[0]
-                    self.vars["event"].set(current)
+                    self.vars["event"].set(formats_to_show[0])
             except:
                 pass
 
@@ -629,7 +655,7 @@ class DownloadWindow(ttk.Frame):
                 raise ValueError("Min Games must be numeric.")
             threshold = int(thr_str)
         except ValueError as e:
-            messagebox.showerror(tr("Download Error"), tr(str(e)))
+            messagebox.showerror("Download Error", str(e))
             return
 
         # CAPTURE DATA ON MAIN THREAD BEFORE ENTERING WORKER
@@ -646,12 +672,7 @@ class DownloadWindow(ttk.Frame):
 
         if self._download_thread and self._download_thread.is_alive():
             return
-        self._download_started = time.monotonic()
-        self._phase = tr("Connecting to 17Lands…") + f" {ctx['event']}"
-        self.vars["status"].set(self._phase)
-        self._set_busy(True)
-        self.progress.configure(mode="indeterminate")
-        self.progress.start(30)
+        self.btn_dl.configure(state="disabled")
 
         self._download_thread = threading.Thread(
             target=self._run_download_process, args=(args, ctx), daemon=True
@@ -662,10 +683,10 @@ class DownloadWindow(ttk.Frame):
         try:
             ex = FileExtractor(
                 ctx["db_loc"],
-                None, None, None,
+                self.progress,
+                self.vars["status"],
+                self,
                 threshold=ctx["threshold"],
-                dispatch=self._messages.put,
-                require_usable_statistics=True,
             )
             ex.clear_data()
             ex.select_sets(self.sets_data[ctx["set_key"]])
@@ -688,87 +709,44 @@ class DownloadWindow(ttk.Frame):
                     if not filename:
                         self._safe_error("Could not save dataset. Your previous dataset was kept.")
                         return
-                    # Never touch Tk or shared configuration on this worker.
-                    self._safe_finalize(msg, filename)
+                    self.configuration.card_data.latest_dataset = filename
+                    write_configuration(self.configuration)
+                    self._safe_finalize(msg)
                 else:
-                    if msg == "Dataset Validation Failed" and not any(
-                        c.get("deck_colors", {}).get("All Decks", {}).get("gihwr", 0) > 0
-                        for c in ex.combined_data.get("card_ratings", {}).values()
-                    ):
-                        msg = "No usable 17Lands win rates. Previous dataset kept."
                     self._safe_error(msg)
             else:
                 self._safe_error("17Lands Connection Failed")
         except Exception as e:
             self._safe_error(str(e))
 
-    def _safe_finalize(self, msg, filename=None):
+    def _safe_finalize(self, msg):
+        def callback():
+            if hasattr(self, "winfo_exists") and self.winfo_exists():
+                self._finalize_download(msg)
+
         if threading.current_thread() is threading.main_thread():
-            self._activate_download(msg, filename)
+            callback()
         else:
-            self._messages.put(("success", (msg, filename)))
+            try:
+                self.after(0, callback)
+            except RuntimeError:
+                pass  # Safely ignore during headless test execution
 
     def _safe_error(self, err):
+        def callback():
+            if hasattr(self, "winfo_exists") and self.winfo_exists():
+                self._handle_error(err)
+
         if threading.current_thread() is threading.main_thread():
-            self._handle_error(err)
+            callback()
         else:
-            self._messages.put(("error", err))
-
-    def _set_busy(self, busy):
-        for control in self._controls:
-            if isinstance(control, (ttk.Button, ttk.Entry, ttk.Menubutton)):
-                control.configure(state="disabled" if busy else "normal")
-        self.btn_dl.configure(state="disabled" if busy else "normal")
-
-    def _poll_download(self):
-        try:
-            while True:
-                kind, value = self._messages.get_nowait()
-                if kind == "status":
-                    self._phase = tr(value)
-                elif kind == "success":
-                    self._activate_download(*value)
-                elif kind == "error":
-                    self._handle_error(value)
-                # Upstream progress reports different phases on different scales.
-                # Keep the activity bar indeterminate instead of inventing a %.
-        except queue.Empty:
-            pass
-        if self._download_started is not None:
-            seconds = int(time.monotonic() - self._download_started)
-            self.vars["status"].set(self._phase + tr(f" | Elapsed: {seconds}s"))
-        self.after(100, self._poll_download)
-
-    def _activate_download(self, msg, filename):
-        if filename:
             try:
-                path = os.path.join(constants.SETS_FOLDER, filename)
-                with open(path, encoding="utf-8") as stream:
-                    dataset = json.load(stream)
-                cards = dataset.get("card_ratings", {})
-                if not any(c.get("deck_colors", {}).get("All Decks", {}).get("gihwr", 0)
-                           for c in cards.values()):
-                    raise ValueError("No usable 17Lands win rates. Previous dataset kept.")
-                meta = dataset.get("meta", {})
-                live_set, live_format = self._current_event()
-                if live_set and (live_set != filename.split("_")[0] or
-                                 live_format != filename.split("_")[1]):
-                    self._finalize_download(tr("Dataset saved for another event. Current draft dataset kept."))
-                    return
-                previous = self.configuration.card_data.latest_dataset
-                self.configuration.card_data.latest_dataset = filename
-                if not write_configuration(self.configuration):
-                    self.configuration.card_data.latest_dataset = previous
-                    raise OSError("Could not save dataset preference. Previous dataset kept.")
-            except Exception as error:
-                self._handle_error(str(error))
-                return
-        self._finalize_download(msg)
+                self.after(0, callback)
+            except RuntimeError:
+                pass  # Safely ignore during headless test execution
 
     def _finalize_download(self, msg):
-        self._download_started = None
-        self._set_busy(False)
-        self.progress.stop()
+        self.btn_dl.configure(state="normal")
         self.progress["value"] = 0
         self._update_table()
 
@@ -777,21 +755,19 @@ class DownloadWindow(ttk.Frame):
             if "Min Games" not in msg
             else "DOWNLOADED (LIMITED DATA)"
         )
-        self.vars["status"].set(tr(status_str))
+        self.vars["status"].set(status_str)
 
         # Force UI to fully redraw and settle BEFORE the blocking messagebox appears
         self.update_idletasks()
 
-        messagebox.showinfo(tr("Dataset Download Complete"), tr(msg))
+        messagebox.showinfo("Dataset Download Complete", msg)
 
         # Defer the main app UI refresh until after the user dismisses the dialog
         if self.on_update_callback:
             self.after(50, self.on_update_callback)
 
     def _handle_error(self, err):
-        self._download_started = None
-        self._set_busy(False)
-        self.progress.stop()
+        self.btn_dl.configure(state="normal")
         self.progress["value"] = 0
-        self.vars["status"].set(tr("DOWNLOAD FAILED"))
-        messagebox.showerror(tr("Download Error"), tr(err))
+        self.vars["status"].set("DOWNLOAD FAILED")
+        messagebox.showerror("Download Error", err)

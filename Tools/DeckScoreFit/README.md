@@ -1,9 +1,28 @@
 # Deck score fit
 
 Sets the weights in `src/advisor/deck_scorer.py` from real results. It takes
-decks from 17Lands' public Premier Draft game data, computes each deck's
-features with the app's own `deck_features()`, and fits how many games each
-feature won.
+decks from 17Lands' public Premier Draft game data (`decks.py`), computes each
+deck's features with the app's own `deck_features()` (`features.py`), and fits
+how many games each feature won (`fit.py`).
+
+Two more scripts work on the same decks. `games.py` reads the dump again and
+keeps each sampled deck's games (on the play, mulligans, result, opening hand)
+and, in five folds by draft, how often each card was in hand or in the deck and
+won, so a deck can be rated from the other folds' games without its own.
+
+`rules.py` tests six of the advisor's pick rules on the decks' results; see
+`experiments/2026-11-03-rule-targets/PROTOCOL.md`. `quality.py` and `horse.py`
+test which version of the card rating predicts the decks' results; see
+`experiments/2026-11-03-rating-parts/PROTOCOL.md`. `parts.py` splits the pair's
+part of that rating into the pair's level and the card's fit; see
+`experiments/2026-11-08-pair-parts/PROTOCOL.md`.
+
+The rating and pair-parts experiments preserve their pre-4.32 baseline:
+`engine` in their output includes sample-size shrinkage, while the live advisor
+no longer does (#259). The `no-shrinkage` variant represents that change.
+Keep the historical definitions when reproducing the committed reports; new
+experiments should explicitly identify the advisor version they evaluate.
+Whole-deck prediction results do not directly establish a better pick order.
 
 It is separate from the app: nothing in `src/` imports it, and the app doesn't
 need it to run. The weights it prints are pasted into `deck_scorer.py` by hand.
@@ -57,7 +76,9 @@ quality itself is worth more or less than the ratings imply.
 Actions → Deck score fit → Run workflow. Set:
 
 - `sets`: a JSON list of set codes, for example `["FRA", "TDM"]`; empty means
-  all ten;
+  every set with Premier Draft game data and ratings, listed in
+  `.github/workflows/deck-score-features.yml`, the features step that this
+  workflow and Rule targets share;
 - `decks`: decks per set (default 50000);
 - `salt`: any text, to sample different decks.
 
@@ -76,6 +97,10 @@ poetry run python Tools/DeckScoreFit/fit.py results/*.json
 ```
 
 Repeat all but the last line for each set. With one set, the report leaves out
-the check on unseen sets.
+the check on unseen sets. For the sampled decks' games and the fold ratings:
+
+```sh
+poetry run python Tools/DeckScoreFit/games.py --games games.csv.gz --decks decks.json.gz --out games.json.gz
+```
 
 Tests: `poetry run pytest Tools/DeckScoreFit/tests`.
