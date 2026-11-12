@@ -8,6 +8,7 @@ from typing import Optional
 from dataclasses import dataclass
 
 from src import constants
+from src.i18n import tr
 from src.configuration import CONFIG_LOCK, write_configuration
 from src.file_extractor import FileExtractor
 from src.utils import retrieve_local_set_list, read_local_manifest
@@ -149,7 +150,7 @@ class DownloadWindow(ttk.Frame):
         )
         self.vars["set"] = tkinter.StringVar(value=default_val)
 
-        ttk.Label(form, text="SET:").grid(
+        ttk.Label(form, text=tr("SET:")).grid(
             row=0, column=0, sticky="e", padx=Theme.scaled_val(5)
         )
 
@@ -174,7 +175,7 @@ class DownloadWindow(ttk.Frame):
         # --- END DYNAMIC SET SORTING ---
 
         self.vars["event"] = tkinter.StringVar(value="PremierDraft")
-        ttk.Label(form, text="EVENT:").grid(
+        ttk.Label(form, text=tr("EVENT:")).grid(
             row=0, column=2, sticky="e", padx=Theme.scaled_val(5)
         )
         self.om_event = ttk.OptionMenu(
@@ -186,7 +187,7 @@ class DownloadWindow(ttk.Frame):
         self.om_event.grid(row=0, column=3, sticky="ew", pady=Theme.scaled_val(2))
 
         self.vars["group"] = tkinter.StringVar(value="All")
-        ttk.Label(form, text="USERS:").grid(
+        ttk.Label(form, text=tr("USERS:")).grid(
             row=1, column=0, sticky="e", padx=Theme.scaled_val(5)
         )
         ttk.OptionMenu(
@@ -194,7 +195,7 @@ class DownloadWindow(ttk.Frame):
         ).grid(row=1, column=1, sticky="ew", pady=Theme.scaled_val(2))
 
         self.vars["threshold"] = tkinter.StringVar(value="500")
-        ttk.Label(form, text="MIN GAMES:").grid(
+        ttk.Label(form, text=tr("MIN GAMES:")).grid(
             row=1, column=2, sticky="e", padx=Theme.scaled_val(5)
         )
         ttk.Entry(form, textvariable=self.vars["threshold"]).grid(
@@ -210,7 +211,7 @@ class DownloadWindow(ttk.Frame):
         self.vars["period"] = tkinter.StringVar(
             value=constants.TIME_PERIOD_DEFAULT_LABEL
         )
-        ttk.Label(form, text="TIME PERIOD:").grid(
+        ttk.Label(form, text=tr("TIME PERIOD:")).grid(
             row=2, column=0, sticky="e", padx=Theme.scaled_val(5)
         )
         ttk.OptionMenu(
@@ -221,7 +222,7 @@ class DownloadWindow(ttk.Frame):
         ).grid(row=2, column=1, sticky="ew", pady=Theme.scaled_val(2))
 
         self.btn_dl = ttk.Button(
-            form, text="Download Selected Dataset", command=self._manual_download
+            form, text=tr("Download Selected Dataset"), command=self._manual_download
         )
         self.btn_dl.grid(
             row=3, column=0, columnspan=4, pady=Theme.scaled_val((10, 0)), sticky="ew"
@@ -229,7 +230,7 @@ class DownloadWindow(ttk.Frame):
 
         self.btn_clear = ttk.Button(
             form,
-            text="Clear Inactive Datasets",
+            text=tr("Clear Inactive Datasets"),
             command=self._clear_inactive_datasets,
             bootstyle="secondary",
         )
@@ -239,7 +240,7 @@ class DownloadWindow(ttk.Frame):
 
         ttk.Button(
             form,
-            text="Reset Dataset Cache",
+            text=tr("Reset Dataset Cache"),
             command=self._clear_set_history,
             bootstyle="secondary",
         ).grid(
@@ -248,7 +249,7 @@ class DownloadWindow(ttk.Frame):
 
         ttk.Button(
             form,
-            text="Restore Deleted Datasets",
+            text=tr("Restore Deleted Datasets"),
             command=self._restore_deleted_datasets,
             bootstyle="secondary",
         ).grid(
@@ -298,10 +299,10 @@ class DownloadWindow(ttk.Frame):
         self.table.selection_set(row_id)
 
         menu = tkinter.Menu(self, tearoff=0)
-        menu.add_command(label="✅ Set as Active Dataset", command=self._on_set_active)
+        menu.add_command(label=tr("✅ Set as Active Dataset"), command=self._on_set_active)
         menu.add_separator()
         menu.add_command(
-            label="🗑️ Delete Dataset", command=lambda: self._delete_dataset(row_id)
+            label=tr("🗑️ Delete Dataset"), command=lambda: self._delete_dataset(row_id)
         )
 
         menu.post(event.x_root, event.y_root)
