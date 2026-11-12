@@ -90,8 +90,25 @@
 | 浮窗关不掉 | 旧版本 bug | 新包已修（Esc/单击/右键）；旧包只能重启 |
 | 拖动窗口卡顿 | 旧版本每秒全量 GC | 新包已修（空闲 CPU 20% → 4.5%） |
 | 启动几秒后闪退 | 旧版本后台线程碰 Tk | 新包已修 |
+| 窗口卡死、CPU 100% | 恢复了一份前后不一致的抓牌状态，触发重绘死循环 | 删 `Temp/active_draft_state.json`，见下文 |
 | 启动没反应 | — | 看 `~/Library/Application Support/MTGA_Draft_17Lands_ZH_Candidate/Debug/debug.log` |
 | 崩溃 | — | 看 `~/Library/Logs/DiagnosticReports/MTGA_17Lands_ZH_Candidate-*.ips` |
+
+### 窗口卡死、CPU 跑满 100%
+
+症状：窗口拖不动也点不动，活动监视器里进程占满一个核。
+
+2026-11-12 遇到过一次，原因是 `Temp/active_draft_state.json` 里存的是某个**中间状态**
+（包次/抓位和牌池对不上），恢复后表格的列宽同步和重绘互相触发，形成死循环。中文名比英文长，
+所以这个循环只在开启中文显示时出现——关掉中文就不复现，容易被误判成翻译的问题。
+
+处理：删掉这个文件，程序会改从 `Player.log` 重新推导当前抓牌状态。
+
+```bash
+rm ~/Library/Application\ Support/MTGA_Draft_17Lands_ZH_Candidate/Temp/active_draft_state.json
+```
+
+删完重开就是正常状态（本次删除后 CPU 从 100% 回到 3.5%，牌池和抓位都能从日志重建）。
 
 ### 游戏更新后（最常见）
 
