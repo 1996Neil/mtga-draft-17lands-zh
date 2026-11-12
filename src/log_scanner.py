@@ -158,6 +158,40 @@ class ArenaScanner:
         except Exception as error:
             logger.error(error)
 
+    @staticmethod
+    def _state_is_sane(state):
+        """Cheap sanity check for a restored draft state.
+
+        A state saved while the scanner was mid-update can hold a pick counter
+        that no longer matches the pack contents. Restoring it put the tables
+        into a repaint loop, so such a state is dropped and rebuilt from the log
+        instead of trusted.
+        """
+        if not isinstance(state, dict):
+            return False
+        for key in ("taken_cards", "draft_history"):
+            if not isinstance(state.get(key, []), list):
+                return False
+        for key in ("picked_cards", "initial_pack", "pack_cards"):
+            value = state.get(key, [])
+            if not isinstance(value, list) or any(not isinstance(x, list) for x in value):
+                return False
+        for key in ("current_pack", "current_pick", "number_of_players"):
+            value = state.get(key, 0)
+            if not isinstance(value, int) or value < 0:
+                return False
+        if state.get("current_pick", 0) > 20:
+            return False
+        pack_cards = state.get("pack_cards") or []
+        current_pack = state.get("current_pack", 0)
+        if pack_cards and current_pack < len(pack_cards):
+            pack = pack_cards[current_pack]
+            pick = state.get("current_pick", 0)
+            # The pick counter runs one ahead of the pack it is showing.
+            if pick and pack and pick > len(pack) + 1:
+                return False
+        return True
+
     def _load_state(self, target_draft_id=None):
         """Recovers the active draft state if the app was closed mid-draft."""
         try:
@@ -169,6 +203,16 @@ class ArenaScanner:
                 if target_draft_id is not None and str(
                     state.get("current_draft_id", "")
                 ) != str(target_draft_id):
+                    return False
+
+                if not self._state_is_sane(state):
+                    logger.warning(
+                        "Discarding inconsistent draft state; rebuilding from the log"
+                    )
+                    try:
+                        os.remove(self.state_file)
+                    except OSError:
+                        pass
                     return False
 
                 self.draft_type = state.get(

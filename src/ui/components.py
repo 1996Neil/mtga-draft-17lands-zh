@@ -1223,9 +1223,15 @@ class DynamicTreeviewManager(ttk.Frame):
         self._scrollbar.grid(row=0, column=1, sticky="ns")
 
         # Dynamically lock the column width to the scrollbar's exact size to prevent resizing loops
+        self._scroll_minsize = 0
+
         def _sync_column_width(e):
+            # Rewriting the same minsize still triggers a layout pass, and a
+            # layout pass calls this again: with wide (Chinese) headers that
+            # looped forever and pegged a core. Only act on a real change.
             req = self._scrollbar.winfo_reqwidth()
-            if req > 1:
+            if req > 1 and req != self._scroll_minsize:
+                self._scroll_minsize = req
                 self.columnconfigure(1, minsize=req)
 
         self._scrollbar.bind("<Configure>", _sync_column_width, add="+")
