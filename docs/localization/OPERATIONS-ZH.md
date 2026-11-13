@@ -78,6 +78,42 @@
 ~/Library/Application Support/MTGA_Draft_17Lands_ZH_Candidate/Sets/
 ```
 
+### 更新中文牌名索引（2026-11 起）
+
+中文牌名不再从维护器 registry 手工导出，而是消费公开的 names-only 包：
+
+- 源仓库：<https://github.com/1996Neil/mtga-card-names>
+- 当前 pin：`resources/localization/RELEASE.json`（release、版本、三个 sha256、行数）
+- 生成物：`resources/localization/cards.json`（**不要手改**）
+
+检查当前文件是否与 pin 一致：
+
+```bash
+python3 Tools/sync_card_names.py --check
+```
+
+更新到 `RELEASE.json` 指定的 release（校验 manifest、gz、jsonl 三层 hash）：
+
+```bash
+python3 Tools/sync_card_names.py --apply
+```
+
+离线环境可以先下载 release 资产，再指定本地文件：
+
+```bash
+python3 Tools/sync_card_names.py \
+  --input /path/to/cards.jsonl \
+  --apply
+```
+
+发布新游戏版本时：先把 `RELEASE.json` 的 `release` / `data_version` / 三个 sha256 / `rows` 更新到新 pin，再跑 `--apply`，最后跑：
+
+```bash
+build-venv2/bin/python -m pytest tests/test_card_names_release.py tests/test_chinese_display.py -q
+```
+
+`Tools/snapshot_names.py` 和 `Tools/extend_card_names.py` 是旧路径，已标记 deprecated；发行构建不要再用它们直接改 `cards.json`。
+
 ---
 
 ## 三、出问题怎么办
@@ -243,7 +279,7 @@ codesign --force --deep --sign - dist-YYYYMMDD/MTGA_17Lands_ZH_Candidate.app
 |---|---|
 | 程序 | `deliverables/Mac-Candidate-DataFix-20261029/MTGA_17Lands_ZH_Candidate.app` |
 | 使用/改动记录 | 同目录 `README.md` |
-| 维护脚本 | 仓库 `Tools/`：`rebind_english_snapshot.py`、`cleanup_local_datasets.py`、`fix_dataset_face_type.py` |
+| 维护脚本 | 仓库 `Tools/`：`sync_card_names.py`、`rebind_english_snapshot.py`、`cleanup_local_datasets.py`、`fix_dataset_face_type.py` |
 | 运行时数据 | `~/Library/Application Support/MTGA_Draft_17Lands_ZH_Candidate/` |
 | 配置 | 同上 `config.json` |
 | 日志 | 同上 `Debug/debug.log` |
