@@ -5,7 +5,7 @@ a = Analysis(
     ["candidate_main.py"],
     pathex=[],
     binaries=[],
-    datas=[("resources/arena/english.json", "resources/arena"), ("resources/datasets/*.json", "resources/datasets"), ("resources/icons/draft.png", "resources/icons"), ("themes/*.tcl", "themes"), ("resources/localization/cards.json", "resources/localization"), ("fixtures/localization/FRA_QuickDraft_All_Data.json", "fixtures/localization"), ("fixtures/localization/fra-pack.json", "fixtures/localization"), ("fixtures/localization/fixed-dataset.json", "fixtures/localization"), ("LICENSE", ".")],
+    datas=[("resources/arena/english.json", "resources/arena"), ("resources/datasets/*.json", "resources/datasets"), ("resources/icons/draft.png", "resources/icons"), ("themes/*.tcl", "themes"), ("resources/localization/cards.json", "resources/localization"), ("resources/localization/RELEASE.json", "resources/localization"), ("fixtures/localization/FRA_QuickDraft_All_Data.json", "fixtures/localization"), ("fixtures/localization/fra-pack.json", "fixtures/localization"), ("fixtures/localization/fixed-dataset.json", "fixtures/localization"), ("LICENSE", ".")],
     hiddenimports=[
 
 

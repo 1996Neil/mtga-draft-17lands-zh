@@ -1,5 +1,6 @@
 """Display-only Chinese card names. Never returns or changes computation objects."""
 from dataclasses import dataclass
+from contextlib import closing
 from pathlib import Path
 from collections import defaultdict
 import hashlib
@@ -39,6 +40,11 @@ def read_source(path):
     if not path.is_file() or path.stat().st_size > 1024 * 1024 * 1024:
         return []
     if path.suffix == '.sqlite':
+        with closing(sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True, timeout=1)) as db:
+            if db.execute("PRAGMA application_id").fetchone()[0] == 0x4E414D45:
+                # Normal read locking keeps automatic updates atomic for readers.
+                return [DisplayRecord(**json.loads(row[0]))
+                        for row in db.execute("SELECT payload FROM names")]
         if any(Path(str(path) + suffix).exists() and Path(str(path) + suffix).stat().st_size
                for suffix in ('-wal', '-journal')):
             raise ValueError('Translation source has active SQLite journal; use a snapshot')

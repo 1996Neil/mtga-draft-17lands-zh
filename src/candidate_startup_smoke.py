@@ -61,6 +61,19 @@ def run(gc_guard):
                       "collection_threads": sorted(set(collected_threads)),
                       "raw_data_unchanged": True,
                       "native_tk": self.root.tk.call("info", "patchlevel")}
+            settings = self.configuration.settings
+            if (settings.chinese_enabled and settings.auto_update_chinese_names and
+                    not settings.chinese_source_path):
+                from src.names_update import store_version
+                assert self.controller._names_started
+                store = Path(constants.BASE_DIR) / "Names/chinese-names.sqlite"
+                assert store.is_file()
+                result["automatic_names_version"], result["automatic_names_rows"] = store_version(store)
+                result["names_worker_finished"] = not any(
+                    thread.name == "chinese-names-update" for thread in threading.enumerate()
+                )
+                # A valid multi-version delta can still be downloading here.
+                # Controlled idle-startup probes assert this separately.
             path = Path(constants.BASE_DIR) / "startup-smoke-result.json"
             path.write_text(json.dumps(result, indent=2))
             print(json.dumps(result), flush=True)

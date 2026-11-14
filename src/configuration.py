@@ -92,6 +92,7 @@ class Settings(BaseModel):
 
     chinese_enabled: bool = False
     chinese_source_path: str = ""
+    auto_update_chinese_names: bool = True
 
     # Core Feature Toggles
     always_on_top: bool = False

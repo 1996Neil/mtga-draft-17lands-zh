@@ -35,15 +35,62 @@ class AppController:
         self.previous_timestamp = 0
         self._update_task_id = None
         self._display_dataset = None
+        self._names_source = None
+        self._names_version = None
+        self._names_started = False
+        self._names_results = queue.SimpleQueue()
 
     def sync_display(self, force=False):
         dataset = self.orchestrator.scanner.set_data
         token = id(getattr(dataset, "_dataset", None))
         if force or token != self._display_dataset:
             self._display_dataset = token
-            source = self.config.settings.chinese_source_path or str(
+            if (self._names_source is None and not self.config.settings.chinese_source_path and
+                    self.config.settings.chinese_enabled):
+                store = Path(constants.BASE_DIR) / "Names/chinese-names.sqlite"
+                if store.is_file():
+                    from src.names_update import store_version
+                    try:
+                        current = store_version(store)
+                        if current:
+                            self._names_source, self._names_version = str(store), current[0]
+                    except Exception:
+                        pass  # Use bundled names if the local cache is unavailable.
+            source = self.config.settings.chinese_source_path or self._names_source or str(
                 Path(constants.RESOURCE_DIR) / "resources/localization/cards.json")
             DISPLAY.request(dataset.get_display_snapshot(), source)
+
+    def start_names_update(self):
+        """One short-lived worker per app startup; never calls Tk from a worker."""
+        if self._names_started:
+            return
+        self._names_started = True
+        settings = self.config.settings
+        if (not settings.chinese_enabled or not settings.auto_update_chinese_names or
+                settings.chinese_source_path):
+            return
+        from src.names_update import check_once, seed_store
+        profile = Path(constants.BASE_DIR) / "Names"
+        bundled = Path(constants.RESOURCE_DIR) / "resources/localization/cards.json"
+        pin_path = bundled.with_name("RELEASE.json")
+
+        def work():
+            import json
+            try:
+                pin = json.loads(pin_path.read_text(encoding="utf-8"))
+                store = profile / "chinese-names.sqlite"
+                # Publish the local usable store even when offline. The normal
+                # update loop receives only this small message, not all names.
+                version, _ = seed_store(store, bundled, pin)
+                self._names_results.put((str(store), version))
+                result = check_once(store, bundled, pin)
+                if result.get("status") == "updated":
+                    self._names_results.put((str(store), result["version"]))
+                logger.info("Chinese names: %s", result)
+            except Exception as error:
+                logger.info("Chinese names update skipped; existing names kept: %s", error)
+
+        threading.Thread(target=work, daemon=True, name="chinese-names-update").start()
 
     def start_boot_sync(self):
         """Phase 1: Immediate synchronization of critical UI components."""
@@ -64,6 +111,7 @@ class AppController:
                 logger.error(f"Dropdown sync failed: {e}", exc_info=True)
 
             self.sync_display()
+            self.start_names_update()
             self.refresh_ui_data()
             self.root.after(500, self.execute_deep_sync)
             self.schedule_update()
@@ -116,6 +164,13 @@ class AppController:
             return
 
         try:
+            names_changed = False
+            while not self._names_results.empty():
+                source, version = self._names_results.get_nowait()
+                names_changed |= (source != self._names_source or version != self._names_version)
+                self._names_source, self._names_version = source, version
+            if names_changed:
+                self.sync_display(force=True)
             self.sync_display()
             display_changed = DISPLAY.drain()
             is_test = "pytest" in sys.modules
