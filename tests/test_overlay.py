@@ -46,6 +46,8 @@ def test_compact_overlay_initialization_and_drag(
     config = Configuration()
     overlay = CompactOverlay(root, mock_app_context, config, lambda: None)
     assert overlay.winfo_exists()
+    assert overlay.master is root
+    assert "_close_overlay" in overlay.protocol("WM_DELETE_WINDOW")
 
     # Dragging now anchors on root coordinates so a press on a header label
     # (not the frame itself) does not make the window jump.

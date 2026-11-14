@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import json
+import logging
 import os
 import tkinter as tk
 from pathlib import Path
@@ -31,6 +32,11 @@ def run(smoke=False, gc_guard=None):
     scanner.draft_sets=['FRA'];scanner.draft_label='QuickDraft'
     scanner.event_string='QuickDraft_FRA_20261008'
     root=tk.Tk()
+    # Windowed frozen builds have no stderr. Keep offline UI probe failures
+    # observable in the disposable profile instead of silently hiding them.
+    root.report_callback_exception = lambda kind, value, traceback: logging.getLogger(__name__).error(
+        "Offline UI callback failed", exc_info=(kind, value, traceback)
+    )
     from src.ui.candidate_icon import apply_candidate_icon
     apply_candidate_icon(root)
     if gc_guard is not None:gc_guard.attach(root)

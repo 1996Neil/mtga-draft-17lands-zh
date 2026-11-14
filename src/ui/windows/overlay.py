@@ -25,7 +25,7 @@ from src.card_logic import format_win_rate
 
 class CompactOverlay(tb.Toplevel):
     def __init__(self, parent, app_context, configuration, on_restore):
-        super().__init__(title=tr("Mini Mode"), topmost=True)
+        super().__init__(master=parent, title=tr("Mini Mode"), topmost=True)
         self.app_context = app_context
         self.orchestrator = app_context.orchestrator
         self.configuration = configuration
@@ -55,6 +55,7 @@ class CompactOverlay(tb.Toplevel):
             pass
 
         self._build_ui()
+        self.protocol("WM_DELETE_WINDOW", self._close_overlay)
 
     def _bind_drag(self, widget):
         """Make the whole header draggable, labels included.
@@ -113,8 +114,10 @@ class CompactOverlay(tb.Toplevel):
         write_configuration(self.configuration)
 
     def _close_overlay(self):
-        self._save_geometry()
-        self.on_restore()
+        try:
+            self._save_geometry()
+        finally:
+            self.on_restore()
 
     def _build_ui(self):
         # --- HEADER (Draggable) ---

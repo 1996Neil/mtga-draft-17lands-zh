@@ -117,6 +117,8 @@ class DraftApp:
 
         self._loading = True
         self._initialized = True
+        from src.ui.macos_reopen import install_macos_reopen
+        install_macos_reopen(self.root, lambda: self.overlay_window or self.root)
 
     # =========================================================================
     # FACADE UI PROPERTIES (Preserves backward compatibility with other files)
@@ -284,18 +286,38 @@ class DraftApp:
         SettingsWindow(parent_window, self.configuration, _on_settings_changed)
 
     def _enable_overlay(self):
-        if self.overlay_window:
-            return
-        self.root.withdraw()
+        if self.overlay_window is not None:
+            try:
+                exists = self.overlay_window.winfo_exists()
+            except tkinter.TclError:
+                exists = False
+            if exists:
+                self.overlay_window.deiconify()
+                self.overlay_window.lift()
+                self.overlay_window.focus_force()
+                self.root.withdraw()
+                return
+            # The native window close button may have destroyed the widget.
+            self.overlay_window = None
+
+        # Do not hide the usable main window until construction has succeeded.
         self.overlay_window = CompactOverlay(
             self.root, self, self.configuration, self._disable_overlay
         )
+        self.overlay_window.deiconify()
+        self.overlay_window.lift()
+        self.overlay_window.focus_force()
+        self.root.withdraw()
         self._refresh_ui_data()
 
     def _disable_overlay(self):
-        if self.overlay_window:
-            self.overlay_window.destroy()
-            self.overlay_window = None
+        overlay, self.overlay_window = self.overlay_window, None
+        if overlay is not None:
+            try:
+                if overlay.winfo_exists():
+                    overlay.destroy()
+            except tkinter.TclError:
+                pass  # Already destroyed by the window manager.
         self.root.deiconify()
         current_scale = constants.UI_SIZE_DICT.get(
             self.configuration.settings.ui_size, 1.0
