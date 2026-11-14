@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import tkinter
-from src.arena_english import english_localizations, identity_signature, connect_readonly
+from src.arena_english import english_localizations, identity_signature, connect_readonly, prepare_index
 from src.ui_progress import UIProgress
 from src.ui.windows.download import DownloadWindow
 from src.limited_sets import SetInfo
@@ -18,26 +18,27 @@ from src.ui.styles import Theme
 
 def database(path, title='English Name'):
     con=sqlite3.connect(path)
-    con.executescript('CREATE TABLE Versions (name TEXT); CREATE TABLE Cards (TitleId INT, GrpId INT); CREATE TABLE Enums (LocId INT); CREATE TABLE Localizations_enUS (LocId INT, Formatted INT, Loc TEXT);')
+    con.executescript('CREATE TABLE Versions (name TEXT); CREATE TABLE Cards (TitleId INT, GrpId INT); CREATE TABLE Enums (LocId INT, Type TEXT); CREATE TABLE Localizations_enUS (LocId INT, Formatted INT, Loc TEXT);')
     con.execute('INSERT INTO Versions VALUES (?)',('same',))
     con.execute('INSERT INTO Cards VALUES (1, 123)')
-    con.execute('INSERT INTO Enums VALUES (2)')
+    con.execute('INSERT INTO Enums VALUES (2, "CardType")')
     con.executemany('INSERT INTO Localizations_enUS VALUES (?,0,?)',[(1,title),(2,'Creature')])
     con.commit();con.close()
 
 
 def test_patched_enus_requires_same_identity_and_trusted_payload(tmp_path):
-    path=tmp_path/'cards.db';database(path,'中文牌名')
-    con=connect_readonly(path)
+    path=tmp_path/'cards.db';database(path)
     rows=[{'LocId':1,'Formatted':0,'Loc':'English Name'},{'LocId':2,'Formatted':0,'Loc':'Creature'}]
-    snapshot={'schema':1,'identity_sha256':identity_signature(con),'localizations':rows,
-              'localizations_sha256':hashlib.sha256(json.dumps(rows,ensure_ascii=True,separators=(',',':')).encode()).hexdigest()}
-    resource=tmp_path/'english.json';resource.write_text(json.dumps(snapshot))
+    resource=tmp_path/'english.json'
+    con=connect_readonly(path)
+    snapshot=prepare_index(con,resource)
+    with sqlite3.connect(path) as writer:
+        writer.execute('UPDATE Localizations_enUS SET Loc="中文牌名" WHERE LocId=1')
     assert english_localizations(con,resource)==rows
     with pytest.raises(sqlite3.OperationalError):con.execute('DELETE FROM Cards')
-    snapshot['identity_sha256']='wrong';resource.write_text(json.dumps(snapshot))
+    snapshot['version_key']='wrong';resource.write_text(json.dumps(snapshot))
     with pytest.raises(ValueError,match='identities changed'):english_localizations(con,resource)
-    snapshot['identity_sha256']=identity_signature(con);snapshot['localizations'][0]['Loc']='Bad English';resource.write_text(json.dumps(snapshot))
+    snapshot['version_key']=identity_signature(con);snapshot['localizations'][0]['Loc']='Bad English';resource.write_text(json.dumps(snapshot))
     with pytest.raises(ValueError,match='corrupt'):english_localizations(con,resource)
     con.close()
 

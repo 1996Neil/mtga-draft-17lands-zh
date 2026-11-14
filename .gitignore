@@ -1,6 +1,25 @@
 # Ignore files created by the app
 config.json
 
+# Local-only inputs, internal verification and generated profile data.
+/Names/
+/evidence/
+/resources/arena/
+/docs/localization/private/
+/docs/localization/*
+!/docs/localization/OPERATIONS-ZH.md
+!/docs/localization/LIGHTWEIGHT-UPDATES.md
+!/docs/localization/PUBLIC-SOURCE.md
+/Tools/verify_live_input.py
+/Tools/snapshot_names.py
+/Tools/extend_card_names.py
+/Tools/coverage_report.py
+/Tools/replay_localization.py
+/Tools/rebind_english_snapshot.py
+/Tools/check_candidate_startup.py
+/Tools/cleanup_local_datasets.py
+/Tools/fix_dataset_face_type.py
+
 # Ignore folders created by the app
 Debug/
 Downloads/

@@ -20,6 +20,7 @@ def test_retrieve_local_arena_data_success(
     monkeypatch.setattr(
         "src.constants.TEMP_CARD_DATA_FILE", str(tmp_path / "temp_card_data.json")
     )
+    monkeypatch.setattr("src.constants.BASE_DIR", str(tmp_path))
 
     # 1. Pretend we found the MTGA database file
     mock_search.return_value = ["/mock/path/Raw_CardDatabase_123.sqlite"]
@@ -33,6 +34,10 @@ def test_retrieve_local_arena_data_success(
 
     # 3. Intercept SQL queries and return mock MTGA data
     def execute_side_effect(query, *args, **kwargs):
+        if "FROM Versions" in query:
+            return [("Data", "synthetic")]
+        if query.lstrip().startswith("SELECT TitleId AS id"):
+            return [(1,), (10,), (20,)]
         if "Localizations" in query:
             return [
                 {"LocId": 1, "Formatted": 1, "Loc": "Lightning Bolt"},
@@ -65,6 +70,7 @@ def test_retrieve_local_arena_data_success(
         return []
 
     mock_cursor.execute = MagicMock(side_effect=execute_side_effect)
+    mock_conn.execute = MagicMock(side_effect=execute_side_effect)
 
     # Restrict to just the M10 set
     extractor.selected_sets = MagicMock(arena=["M10"])

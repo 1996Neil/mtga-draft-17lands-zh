@@ -24,7 +24,10 @@ sets = PROFILE / 'Sets'; sets.mkdir(exist_ok=True)
 historical = sets / 'FRA_QuickDraft_All_Data.json'
 import hashlib
 migrated_sample = False
-if historical.is_file() and hashlib.sha256(historical.read_bytes()).hexdigest() == 'c78746867adf9f5c471cd5b321bf86acc7ef53d1917c56af732725c724f2ecaf':
+if historical.is_file() and hashlib.sha256(historical.read_bytes()).hexdigest() in {
+    'c78746867adf9f5c471cd5b321bf86acc7ef53d1917c56af732725c724f2ecaf',
+    '2a3394ca743e09eb93508f315df097352514d4e7e753049d06f0e9804b9a6866',
+}:
     archive = PROFILE / 'Offline-Samples'; archive.mkdir(exist_ok=True)
     destination = archive / historical.name
     if not destination.exists():
