@@ -770,5 +770,5 @@ class DownloadWindow(ttk.Frame):
     def _handle_error(self, err):
         self.btn_dl.configure(state="normal")
         self.progress["value"] = 0
-        self.vars["status"].set("DOWNLOAD FAILED")
-        messagebox.showerror("Download Error", err)
+        self.vars["status"].set(tr("DOWNLOAD FAILED"))
+        messagebox.showerror(tr("Download Error"), tr(str(err)))

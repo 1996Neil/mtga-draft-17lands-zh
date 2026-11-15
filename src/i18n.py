@@ -1,6 +1,7 @@
 """Small Chinese-first UI text helpers."""
 
 ZH = {
+    "Arena identities changed or English names were localized. Prepare a local English identity index from an unmodified database of the same game version using Tools/prepare_english_index.py. Existing datasets are kept.": "游戏牌库已更新，或英文卡名已被汉化。请用同一游戏版本的原始英文牌库，通过 Tools/prepare_english_index.py 更新本地英文卡名索引，再重试下载。已有数据集已保留；重新登录游戏无法解决此问题。",
     "Connecting to 17Lands…": "正在连接 17Lands…",
     "No usable 17Lands win rates. Previous dataset kept.": "没有可用的 17Lands 胜率，已保留原数据集。",
     "Dataset saved for another event. Current draft dataset kept.": "其他赛制的数据已保存，当前轮抓继续使用原数据集。",

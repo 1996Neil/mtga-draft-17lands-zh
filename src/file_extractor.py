@@ -15,7 +15,7 @@ from src import constants
 from src.logger import create_logger
 from src.utils import Result, check_file_integrity, clean_string
 from src.ui_progress import UIProgress
-from src.arena_english import connect_readonly, english_localizations
+from src.arena_english import EnglishIdentityError, connect_readonly, english_localizations
 from src.seventeenlands import Seventeenlands
 from src.scryfall_tagger import ScryfallTagger
 from src.constants import COLOR_WIN_RATE_GAME_COUNT_THRESHOLD_DEFAULT
@@ -337,6 +337,7 @@ class FileExtractor(UIProgress):
         self.deck_colors = constants.DECK_COLORS
         self.sets_17lands = []
         self.threshold = threshold
+        self._local_database_error = ""
 
     def clear_data(self):
         """Clear stored set information"""
@@ -755,6 +756,8 @@ class FileExtractor(UIProgress):
                     )
 
                     if not result:
+                        if self._local_database_error:
+                            result_string = self._local_database_error
                         break
 
                     self._update_status("Building Temporary Card Data File")
@@ -979,6 +982,7 @@ class FileExtractor(UIProgress):
         card_enumerators = {}
         card_data = {}
         connection = None
+        self._local_database_error = ""
         try:
             # Open Sqlite3 database
             while True:
@@ -1019,6 +1023,10 @@ class FileExtractor(UIProgress):
                 result, card_data = self._retrieve_local_cards(rows)
                 break
 
+        except EnglishIdentityError as error:
+            result = False
+            self._local_database_error = str(error)
+            logger.error(error)
         except Exception as error:
             result = False
             logger.error(error)

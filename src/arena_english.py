@@ -21,6 +21,17 @@ REQUIRED_IDS = """
     UNION SELECT LocId FROM Enums WHERE Type IN ('Color','CardType','SubType')
 """
 
+ENGLISH_INDEX_REQUIRED = (
+    "Arena identities changed or English names were localized. "
+    "Prepare a local English identity index from an unmodified database "
+    "of the same game version using Tools/prepare_english_index.py. "
+    "Existing datasets are kept."
+)
+
+
+class EnglishIdentityError(ValueError):
+    """The installed game needs a matching local English identity index."""
+
 
 def connect_readonly(path):
     return sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
@@ -111,12 +122,7 @@ def english_localizations(connection, resource=None):
                 raise
     rows = required_localizations(connection)
     if any(re.search(r"[\u3400-\u9fff]", row["Loc"]) for row in rows):
-        raise ValueError(
-            "Arena identities changed or English names were localized. "
-            "Prepare a local English identity index from an unmodified database "
-            "of the same game version using Tools/prepare_english_index.py. "
-            "Existing datasets are kept."
-        )
+        raise EnglishIdentityError(ENGLISH_INDEX_REQUIRED)
     validate_rows(rows)
     if resource is None:
         try:

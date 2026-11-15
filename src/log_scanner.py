@@ -182,15 +182,42 @@ class ArenaScanner:
                 return False
         if state.get("current_pick", 0) > 20:
             return False
-        pack_cards = state.get("pack_cards") or []
-        current_pack = state.get("current_pack", 0)
-        if pack_cards and current_pack < len(pack_cards):
-            pack = pack_cards[current_pack]
-            pick = state.get("current_pick", 0)
-            # The pick counter runs one ahead of the pack it is showing.
-            if pick and pack and pick > len(pack) + 1:
-                return False
+        # pack_cards is indexed by table seat, not booster number. Packs also
+        # shrink as picks advance, so their length cannot validate a pick number.
         return True
+
+    def _limited_course(self, data):
+        """Keep an event's name and pool together when Arena returns many courses."""
+        if not isinstance(data, dict):
+            return None
+        courses = data.get("Courses", data.get("Course", data))
+        if isinstance(courses, dict):
+            courses = [courses]
+        if not isinstance(courses, list):
+            return None
+        candidates = []
+        for course in courses:
+            if not isinstance(course, dict) or course.get("CurrentModule") == "Complete":
+                continue
+            name = course.get("InternalEventName")
+            if not isinstance(name, str):
+                continue
+            if (self.__check_special_event(name)[0]
+                    or self.__check_standard_event(name)[0]):
+                candidates.append(course)
+        current = [course for course in candidates
+                   if course["InternalEventName"] == self.event_string]
+        if len(current) == 1:
+            return current[0]
+        drafting = [course for course in candidates
+                    if course.get("CurrentModule") in ("PlayerDraft", "BotDraft")]
+        if len(drafting) == 1:
+            return drafting[0]
+        if len(candidates) == 1:
+            return candidates[0]
+        # Multiple unbound limited courses are ambiguous: never switch events
+        # or overwrite a pool based merely on their position in the response.
+        return None
 
     def _load_state(self, target_draft_id=None):
         """Recovers the active draft state if the app was closed mid-draft."""
@@ -389,10 +416,9 @@ class ArenaScanner:
                             json_start = line.find("{")
                             if json_start != -1:
                                 event_data = process_json(line[json_start:])
-                                internal_name = json_find(
-                                    "InternalEventName", event_data
-                                )
-                                if internal_name:
+                                course = self._limited_course(event_data)
+                                if course:
+                                    internal_name = course["InternalEventName"]
                                     dummy_payload = {"EventName": internal_name}
                                     is_new, et, did = self.__check_event(dummy_payload)
                                     if is_new:
@@ -400,13 +426,14 @@ class ArenaScanner:
                                         event_type = et
                                         draft_id = did
                                         event_line = line
-                                        card_pool = json_find("CardPool", event_data)
+                                        card_pool = course.get("CardPool", [])
                                         with self.lock:
                                             self.draft_start_offset = offset
                                             if card_pool:
                                                 self.taken_cards = [
                                                     str(c) for c in card_pool
                                                 ]
+                                                self._save_state()
                         except Exception as e:
                             logger.error(f"Error parsing Deck Recovery line: {e}")
 
@@ -1106,28 +1133,11 @@ class ArenaScanner:
                 with self.lock:
                     current_event_string = self.event_string
 
-                # Check root first
-                if "CardPool" in data and "InternalEventName" in data:
-                    detected_event_name = data.get("InternalEventName")
-                    if (
-                        not current_event_string
-                        or detected_event_name == current_event_string
-                    ):
-                        pool.extend(data.get("CardPool", []))
-                else:
-                    course = data.get("Course", data.get("Courses", {}))
-                    if isinstance(course, list):
-                        for c in course:
-                            name = c.get("InternalEventName")
-                            if not current_event_string or name == current_event_string:
-                                detected_event_name = name
-                                pool.extend(c.get("CardPool", []))
-                                break
-                    elif isinstance(course, dict):
-                        name = course.get("InternalEventName")
-                        if not current_event_string or name == current_event_string:
-                            detected_event_name = name
-                            pool.extend(course.get("CardPool", []))
+                course = self._limited_course(data)
+                if course:
+                    detected_event_name = course["InternalEventName"]
+                    if not current_event_string or detected_event_name == current_event_string:
+                        pool.extend(course.get("CardPool", []))
 
                 # RECOVERY: If we found a pool but didn't have an event registered, register it now
                 if pool and not current_event_string and detected_event_name:

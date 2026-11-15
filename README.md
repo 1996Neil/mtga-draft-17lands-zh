@@ -127,6 +127,13 @@ macOS 中文候选的 app-profile 是
 `~/Library/Application Support/MTGA_Draft_17Lands_ZH_Candidate`。
 缺少匹配索引时会明确提示并保留已有数据集。公开源码和新构建不附带完整游戏英文文本。
 
+若本地已准备当前版本的 `Names/english-index.json`，应用仍报
+`verified English source does not match`，说明启动的还是旧构建。
+请使用下方步骤重新构建并启动新应用；更新源码不会更新已经打包的 `.app`。
+新读取逻辑会优先使用本地匹配索引，不需要修改游戏或强行重绑旧英文快照。
+游戏重启后，工具会从赛事列表中识别未完成的限制赛，不会把前面的普通对局
+当作轮抽；后期牌包变小时也不会因此丢弃有效的轮抽缓存。
+
 ## 构建与验证
 
 ```sh
